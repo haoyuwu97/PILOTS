@@ -6,6 +6,10 @@ The current v1 scope targets **LAMMPS** (text dump + optional LAMMPS data topolo
 **Design goal:** when adding a new physical observable, you primarily write a new *measure* implementation.
 Follow/flush/checkpoint, selection, topology/graph primitives, auditing, and `results.json` indexing are provided by the platform.
 
+## Documentation
+
+- [Online Manual](https://haoyuwu97.github.io/PILOTS/)
+
 ## Build
 
 ```bash

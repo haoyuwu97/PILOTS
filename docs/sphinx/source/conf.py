@@ -54,5 +54,5 @@ if repo and "/" in repo:
 
 # Intersphinx (optional; helps link to external docs).
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
+    "python": ("https://docs.python.org/3", "https://docs.python.org/3/objects.inv"),
 }

@@ -6,32 +6,6 @@ The current v1 scope targets **LAMMPS** (text dump + optional LAMMPS data topolo
 **Design goal:** when adding a new physical observable, you primarily write a new *measure* implementation.
 Follow/flush/checkpoint, selection, topology/graph primitives, auditing, and `results.json` indexing are provided by the platform.
 
-## Documentation
-
-The manual is written in Sphinx and can be built into a static HTML site.
-
-- **Sphinx sources:** `docs/sphinx/source/`
-- **Build locally:** `./docs/build_docs.sh`
-- **HTML output directory:** `docs/manual/` (generated)
-
-### Online manual (GitHub Pages)
-
-This repository includes an automated GitHub Pages deployment workflow:
-
-- `.github/workflows/docs-pages.yml`
-
-One-time setup:
-
-1. Go to **Settings -> Pages**.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-
-After that, editing any `docs/sphinx/source/*.rst` file directly on GitHub (web UI) and committing to `main`
-will automatically rebuild and deploy the manual.
-
-The published URL will be:
-
-- `https://haoyuwu97.github.io/PILOTS/`
-
 ## Build
 
 ```bash

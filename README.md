@@ -1,4 +1,4 @@
-# PILOTS
+# PILOTS: Physical Integrated Library for Observables & Trajectories in Soft-Matter Simulations
 
 PILOTS is a high-performance, reproducible trajectory analysis runner for large-scale molecular simulations.
 The current v1 scope targets **LAMMPS** (text dump + optional LAMMPS data topology).

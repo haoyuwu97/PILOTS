@@ -78,6 +78,11 @@ public:
     int diag_mask = 7;      // xx=1,yy=2,zz=4
     bool remove_drift = true;
 
+    // When true (CLI --validate-config), avoid any output side-effects.
+    // This allows Runner::validate_config() to instantiate measures and
+    // execute on_start() without creating directories or writing files.
+    bool dry_run = false;
+
     CorrelatorSpec corr;    // shared correlator configuration
   };
 
@@ -184,7 +189,10 @@ public:
     started_ = true;
 
     // Create an initial output file (header-only) so follow/online mode has something to tail.
-    flush_partial();
+    // In --validate-config mode, avoid any output side-effects.
+    if (!opt_.dry_run) {
+      flush_partial();
+    }
   }
 
   void on_frame(const Frame& frame, std::size_t frame_index) override {
@@ -239,6 +247,7 @@ public:
   }
 
   void flush_partial() override {
+    if (opt_.dry_run) return;
     if (!started_) return;
     const CorrelationSeriesT6 series = corr_->snapshot();
 
@@ -249,6 +258,7 @@ public:
   }
 
   void finalize() override {
+    if (opt_.dry_run) return;
     // finalize is non-destructive, but represents the final flush.
     flush_partial();
   }

@@ -17,6 +17,7 @@ authoring.
    :caption: User Guide
 
    getting-started
+   python
    cli
    config
    groups

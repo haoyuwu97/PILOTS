@@ -156,6 +156,7 @@ std::unique_ptr<IMeasure> msd_create(const IniConfig& cfg,
   opt.diag_mask = diag_mask;
   opt.remove_drift = remove_drift;
   opt.corr = corr_spec;
+  opt.dry_run = env.dry_run;
 
   return std::make_unique<MSDMeasure>(instance, out_path.string(), sel, drift_sel, opt);
 }

@@ -1097,7 +1097,10 @@ int Runner::run_impl_(bool validate_only) {
     ma.source_group = mapping_spec.source_group;
     ma.file = mapping_spec.file_path.empty() ? std::string("") : mapping_spec.file_path.string();
     ma.file_hash_fnv1a64_hex = mapping_spec.file_hash_fnv1a64_hex;
-    ma.spec_hash_fnv1a64_hex = hex_u64(mapping_spec.spec_hash_fnv1a64());
+    // Only provide a spec hash when mapping is enabled. This avoids confusion
+    // in downstream tooling where enabled=false but a non-empty hash looks like
+    // an active mapping definition.
+    ma.spec_hash_fnv1a64_hex = mapping_enabled ? hex_u64(mapping_spec.spec_hash_fnv1a64()) : std::string();
     idx.mapping = std::move(ma);
   }
 

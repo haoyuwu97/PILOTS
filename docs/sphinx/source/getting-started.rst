@@ -51,3 +51,10 @@ To rebuild the HTML manual with Sphinx:
 
    python -m pip install -r docs/sphinx/requirements.txt
    sphinx-build -b html docs/sphinx/source docs/manual
+
+Python integration
+------------------
+
+If you prefer a Python-first workflow (config in code + dataset loading), see:
+
+* :doc:`python`

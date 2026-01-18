@@ -203,7 +203,9 @@ static std::unique_ptr<IMeasure> create_fn(const IniConfig& cfg,
     const std::string wm = cfg.get_string(section, "writer_mode");
     if (wm == "append") wmode = sdk::TextWriteMode::Append;
   }
-  sdk::TextWriter writer(out_path, wmode);
+  // In dry-run mode (CLI --validate-config), TextWriter becomes a no-op
+  // to avoid any output side-effects.
+  sdk::TextWriter writer(out_path, wmode, env.dry_run);
 
   sdk::SelectionHandle sel(instance, env.selection_provider, group_ref, topo_ref, combine);
 

@@ -6,7 +6,7 @@ on:
     paths:
       - 'docs/sphinx/**'
       - 'docs/build_docs.sh'
-      - '.github/workflows/docs-pages.yml'
+      - '.github/workflows/doc-pages.yml'
   workflow_dispatch:
 
 permissions:

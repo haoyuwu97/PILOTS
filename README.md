@@ -30,7 +30,7 @@ will automatically rebuild and deploy the manual.
 
 The published URL will be:
 
-- `https://<owner>.github.io/<repo>/`
+- `https://haoyuwu97.github.io/PILOTS/`
 
 ## Build
 

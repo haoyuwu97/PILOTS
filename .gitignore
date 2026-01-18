@@ -1,41 +1,15 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
+/build/
 *.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
+*.a
 *.so
 *.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
 *.exe
 *.out
-*.app
+*.dat
+*.log
+.DS_Store
 
-# debug information files
-*.dwo
+# Sphinx output (HTML manual)
+docs/manual/*
+!docs/manual/.gitkeep
+!docs/manual/README.txt

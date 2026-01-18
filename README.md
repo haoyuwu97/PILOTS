@@ -8,31 +8,7 @@ Follow/flush/checkpoint, selection, topology/graph primitives, auditing, and `re
 
 ## Documentation
 
-The manual is written in Sphinx and can be built into a static HTML site.
-
-- **Sphinx sources:** `docs/sphinx/source/`
-- **Build locally:** `./docs/build_docs.sh`
-- **HTML output directory:** `docs/manual/` (generated)
-
-### Online manual (GitHub Pages)
-
-This repository includes an automated GitHub Pages deployment workflow:
-
-- `.github/workflows/docs-pages.yml`
-
-One-time setup:
-
-1. Go to **Settings -> Pages**.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-
-After that, editing any `docs/sphinx/source/*.rst` file directly on GitHub (web UI) and committing to `main`
-will automatically rebuild and deploy the manual.
-
-The published URL will be:
-
-- https://OWNER.github.io/REPO/
-
-Replace `OWNER` and `REPO` with your GitHub username/organization and repository name.
+- [Online Manual](https://haoyuwu97.github.io/PILOTS/)
 
 ## Build
 

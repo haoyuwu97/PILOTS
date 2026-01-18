@@ -1,0 +1,39 @@
+ITEM: TIMESTEP
+0
+ITEM: NUMBER OF ATOMS
+4
+ITEM: BOX BOUNDS pp pp pp
+0 10
+0 10
+0 10
+ITEM: ATOMS id type mol xu yu zu
+1 1 1 0 0 0
+2 1 1 1 0 0
+3 2 2 0 1 0
+4 2 2 1 1 0
+ITEM: TIMESTEP
+1
+ITEM: NUMBER OF ATOMS
+4
+ITEM: BOX BOUNDS pp pp pp
+0 10
+0 10
+0 10
+ITEM: ATOMS id type mol xu yu zu
+4 2 2 2 1 0
+2 1 1 1 1 0
+1 1 1 1 0 0
+3 2 2 0 2 0
+ITEM: TIMESTEP
+2
+ITEM: NUMBER OF ATOMS
+4
+ITEM: BOX BOUNDS pp pp pp
+0 10
+0 10
+0 10
+ITEM: ATOMS id type mol xu yu zu
+1 1 1 2 0 0
+2 1 1 2 1 0
+3 2 2 0 3 0
+4 2 2 3 1 0

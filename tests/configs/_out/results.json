@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0",
+  "pilots_version": "0.1.0",
+  "run": {
+    "model_scale": "auto",
+    "dt_unit": "simulation_time",
+    "config_path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/msd.ini",
+    "config_hash_fnv1a64": "45ee2257ff080f37",
+    "input_path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/data/sample.dump",
+    "config_fingerprint":     {
+      "path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/msd.ini",
+      "size_bytes": 301,
+      "mtime_epoch_s": 1768389950,
+      "hash_kind": "fnv1a64",
+      "hash_computed": true,
+      "hash_fnv1a64": "45ee2257ff080f37"
+    },
+    "input_fingerprint":     {
+      "path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/data/sample.dump",
+      "size_bytes": 489,
+      "mtime_epoch_s": 1768389950,
+      "hash_kind": "fnv1a64",
+      "hash_computed": true,
+      "hash_fnv1a64": "90bcbc9f6ec2f965"
+    },
+    "mapping": {
+      "enabled": false,
+      "mode": "none",
+      "position": "com_geom",
+      "source_group": "",
+      "file": "",
+      "file_hash_fnv1a64": "",
+      "spec_hash_fnv1a64": "23cd01ddafd5c96c"
+    },
+    "output_dir": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/_out",
+    "dt": 1,
+    "threads": 56,
+    "follow": false,
+    "flush_every_frames": 0,
+    "flush_every_seconds": 0,
+    "checkpoint_out": "",
+    "resume_from": "",
+    "reader_offset": 489,
+    "frames_processed": 3,
+    "wall_seconds": 2.4556216050000002,
+    "topology": {
+      "file": "",
+      "format": "",
+      "hash_fnv1a64": "",
+      "fingerprint":       {
+        "path": "",
+        "size_bytes": 0,
+        "mtime_epoch_s": 0,
+        "hash_kind": "none",
+        "hash_computed": false,
+        "hash_fnv1a64": ""
+      },
+      "derive_mol_from_bonds": false,
+      "loaded_sections": []
+    }
+  },
+  "profiling": {
+    "reader_seconds": 0.0061310970000000003,
+    "group_setup_seconds": 0.000147577,
+    "measures": {
+      "msd": {"on_start_s": 0.00045937300000000001, "on_frame_s": 2.3473265210000003, "finalize_s": 0.098390730999999995, "frames": 3}
+    }
+  },
+  "polymer_classifier": {
+    "graph_source": "none",
+    "tags": ["unavailable"],
+    "hint": "polymer classifier skipped: no topology bonds were loaded (topology.load must include bonds)",
+    "summary": {
+      "n_components": 0,
+      "largest_component_size": 0
+    },
+    "components": [
+    ]
+  },
+  "groups": {
+    "atom_groups": [
+      {
+        "name": "all",
+        "expr": "type:*",
+        "is_dynamic": false,
+        "samples": 1,
+        "size_min": 4,
+        "size_max": 4,
+        "size_mean": 4,
+        "size_var": 0
+      },
+      {
+        "name": "filler",
+        "expr": "type:2",
+        "is_dynamic": false,
+        "samples": 1,
+        "size_min": 2,
+        "size_max": 2,
+        "size_mean": 2,
+        "size_var": 0
+      },
+      {
+        "name": "poly",
+        "expr": "type:1",
+        "is_dynamic": false,
+        "samples": 1,
+        "size_min": 2,
+        "size_max": 2,
+        "size_mean": 2,
+        "size_var": 0
+      }
+    ],
+    "topo_groups": [
+    ],
+    "combined_selections": [
+      {
+        "key": "A=all;T=all;combine=A",
+        "is_dynamic": false,
+        "samples": 1,
+        "size_min": 4,
+        "size_max": 4,
+        "size_mean": 4,
+        "size_var": 0
+      },
+      {
+        "key": "A=all;T=all;combine=A&T",
+        "is_dynamic": false,
+        "samples": 1,
+        "size_min": 4,
+        "size_max": 4,
+        "size_mean": 4,
+        "size_var": 0
+      }
+    ]
+
+  },
+  "measures": [
+    {
+      "instance": "msd",
+      "type": "msd",
+      "selection": "A=all;T=all;combine=A&T",
+      "n_selected": 4,
+      "params": {
+        "block_size": "2",
+        "correlator": "exact",
+        "diag_mask": "7",
+        "drift_group": "A=all;T=all;combine=A",
+        "dt": "1",
+        "frame_end": "2",
+        "frame_start": "0",
+        "lag_axis": "frame",
+        "lag_stride": "1",
+        "remove_drift": "1"
+      },
+      "outputs": [
+        {
+          "path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/_out/msd_all.dat",
+          "format": "text",
+          "x_axis": "frame",
+          "x_unit": "frames",
+          "columns": ["lag", "time", "msd", "count_pairs", "sem", "n_blocks", "mean_dtimestep"],
+          "column_units": ["", "", "", "", "", "", ""],
+          "column_descriptions": ["", "", "", "", "", "", ""]
+        }
+      ]
+    }
+  ]
+}

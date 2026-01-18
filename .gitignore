@@ -13,3 +13,11 @@
 docs/manual/*
 !docs/manual/.gitkeep
 !docs/manual/README.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+python/.venv/
+.venv/

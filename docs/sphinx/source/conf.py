@@ -56,3 +56,16 @@ if repo and "/" in repo:
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", "https://docs.python.org/3/objects.inv"),
 }
+
+python_intersphinx = intersphinx_mapping.get("python")
+if (
+    python_intersphinx
+    and isinstance(python_intersphinx, tuple)
+    and len(python_intersphinx) >= 2
+):
+    python_url, python_inventory = python_intersphinx[0], python_intersphinx[1]
+    if not python_inventory or isinstance(python_inventory, dict):
+        intersphinx_mapping["python"] = (
+            python_url,
+            f"{python_url.rstrip('/')}/objects.inv",
+        )

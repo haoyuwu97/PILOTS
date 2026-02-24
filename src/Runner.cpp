@@ -38,6 +38,7 @@
 #include "pilots/alg/mapping/MappingSpec.hpp"
 #include "pilots/alg/polymer/PolymerClassifier.hpp"
 #include "pilots/alg/index/ChainIndex.hpp"
+#include "pilots/alg/stats/RunningMeanVar.hpp"
 #include "pilots/util/AtomicFile.hpp"
 #include "pilots/util/BinaryIO.hpp"
 #include "pilots/util/Hash.hpp"
@@ -72,6 +73,141 @@ struct ResumeMeta {
   std::vector<std::string> topology_loaded_sections;
   bool topology_derive_mol_from_bonds = false;
   std::vector<pilots::output::MeasureProfiling> mp;
+};
+
+// M0: Run-level sampling / integrity statistics over frames processed by the Runner.
+// This is intentionally kept lightweight so it can be updated during streaming runs.
+struct FrameStatsAcc {
+  bool initialized = false;
+  std::size_t frames = 0;
+
+  std::int64_t timestep_first = 0;
+  std::int64_t timestep_last = 0;
+  std::int64_t timestep_min = 0;
+  std::int64_t timestep_max = 0;
+
+  std::size_t natoms_min = 0;
+  std::size_t natoms_max = 0;
+  pilots::alg::stats::RunningMeanVar natoms_mv;
+
+  bool box_is_triclinic = false;
+  pilots::Box first_box;
+  std::size_t box_changes = 0;
+
+  // stride(timestep) statistics
+  bool have_prev = false;
+  std::int64_t prev_timestep = 0;
+  std::int64_t delta_min = 0;
+  std::int64_t delta_max = 0;
+  pilots::alg::stats::RunningMeanVar delta_mv;
+  std::unordered_map<std::int64_t, std::size_t> delta_counts;
+
+  static bool box_equal(const pilots::Box& a, const pilots::Box& b) {
+    return a.triclinic == b.triclinic &&
+           a.xlo == b.xlo && a.xhi == b.xhi &&
+           a.ylo == b.ylo && a.yhi == b.yhi &&
+           a.zlo == b.zlo && a.zhi == b.zhi &&
+           a.xy == b.xy && a.xz == b.xz && a.yz == b.yz;
+  }
+
+  void add(const pilots::Frame& f) {
+    if (!initialized) {
+      initialized = true;
+      frames = 0;
+      timestep_first = f.timestep;
+      timestep_last = f.timestep;
+      timestep_min = f.timestep;
+      timestep_max = f.timestep;
+      natoms_min = f.natoms;
+      natoms_max = f.natoms;
+      natoms_mv.reset();
+      natoms_mv.add(static_cast<double>(f.natoms));
+
+      box_is_triclinic = f.box.triclinic;
+      first_box = f.box;
+      box_changes = 0;
+
+      have_prev = true;
+      prev_timestep = f.timestep;
+      delta_min = 0;
+      delta_max = 0;
+      delta_mv.reset();
+      delta_counts.clear();
+      frames = 1;
+      return;
+    }
+
+    ++frames;
+    timestep_last = f.timestep;
+    timestep_min = std::min(timestep_min, f.timestep);
+    timestep_max = std::max(timestep_max, f.timestep);
+
+    natoms_min = std::min(natoms_min, f.natoms);
+    natoms_max = std::max(natoms_max, f.natoms);
+    natoms_mv.add(static_cast<double>(f.natoms));
+
+    if (!box_equal(f.box, first_box)) {
+      ++box_changes;
+    }
+
+    if (have_prev) {
+      const std::int64_t d = f.timestep - prev_timestep;
+      if (delta_counts.empty()) {
+        delta_min = d;
+        delta_max = d;
+      } else {
+        delta_min = std::min(delta_min, d);
+        delta_max = std::max(delta_max, d);
+      }
+      delta_mv.add(static_cast<double>(d));
+      delta_counts[d] += 1;
+    }
+    prev_timestep = f.timestep;
+    have_prev = true;
+  }
+
+  std::optional<pilots::output::FrameStatsAudit> snapshot() const {
+    if (!initialized) return std::nullopt;
+    pilots::output::FrameStatsAudit out;
+    out.frames = frames;
+    out.timestep_first = timestep_first;
+    out.timestep_last = timestep_last;
+    out.timestep_min = timestep_min;
+    out.timestep_max = timestep_max;
+    out.natoms_min = natoms_min;
+    out.natoms_max = natoms_max;
+    out.natoms_mean = natoms_mv.mean();
+    out.natoms_var = natoms_mv.var_pop();
+    out.box_is_triclinic = box_is_triclinic;
+    out.box_changes = box_changes;
+
+    out.timestep_delta_samples = delta_mv.count();
+    if (out.timestep_delta_samples > 0) {
+      out.timestep_delta_min = delta_min;
+      out.timestep_delta_max = delta_max;
+      out.timestep_delta_mean = delta_mv.mean();
+      out.timestep_delta_var = delta_mv.var_pop();
+
+      // mode(delta)
+      std::int64_t mode = 0;
+      std::size_t mode_count = 0;
+      for (const auto& kv : delta_counts) {
+        const auto d = kv.first;
+        const auto c = kv.second;
+        if (c > mode_count || (c == mode_count && d < mode)) {
+          mode = d;
+          mode_count = c;
+        }
+      }
+      out.timestep_delta_mode = mode;
+      out.timestep_delta_mode_count = mode_count;
+      out.irregular_stride_count = (out.timestep_delta_samples >= mode_count)
+                                      ? (out.timestep_delta_samples - mode_count)
+                                      : 0;
+      out.is_uniform_stride = (delta_counts.size() <= 1);
+    }
+    return out;
+  }
 };
 
 inline std::string hex_u64(std::uint64_t h) {
@@ -1189,12 +1325,17 @@ int Runner::run_impl_(bool validate_only) {
     return out;
   };
 
+  // M0: accumulate run-level integrity statistics over processed frames.
+  FrameStatsAcc frame_stats;
+
   auto write_index = [&]() {
     idx.frames_processed = frame_idx;
     idx.wall_seconds = wall_base + total_timer.elapsed_seconds();
     idx.reader_seconds = t_reader;
     idx.group_setup_seconds = t_group_setup;
     idx.reader_offset = reader.tell_offset();
+
+    idx.frame_stats = frame_stats.snapshot();
 
     idx.measure_profiling.clear();
     idx.measure_profiling.reserve(measures.size());
@@ -1244,6 +1385,7 @@ int Runner::run_impl_(bool validate_only) {
       measures[i]->on_frame(frame, 0);
       mp[i].frames += 1;
     }
+    frame_stats.add(frame);
     frame_idx = 1;
   }
 
@@ -1293,6 +1435,7 @@ int Runner::run_impl_(bool validate_only) {
       measures[i]->on_frame(frame, frame_idx);
       mp[i].frames += 1;
     }
+    frame_stats.add(frame);
     ++frame_idx;
 
     const bool need_flush_frames = (flush_every_frames > 0) && (frame_idx >= last_flush_frame + flush_every_frames);

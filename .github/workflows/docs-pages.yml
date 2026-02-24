@@ -15,7 +15,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: pages
   cancel-in-progress: true
 
 jobs:
@@ -37,8 +37,7 @@ jobs:
 
       - name: Build HTML
         run: |
-          bash docs/build_docs.sh
-          touch docs/manual/.nojekyll
+          sphinx-build -b html docs/sphinx/source docs/manual
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

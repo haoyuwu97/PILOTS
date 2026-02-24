@@ -42,6 +42,37 @@ struct MappingAudit {
   std::string spec_hash_fnv1a64_hex;           // hash of the mapping spec (stable string canonicalization)
 };
 
+// Run-level sampling / integrity audit (M0).
+// This is computed over frames that were actually processed by the Runner.
+struct FrameStatsAudit {
+  std::size_t frames = 0;
+
+  std::int64_t timestep_first = 0;
+  std::int64_t timestep_last = 0;
+  std::int64_t timestep_min = 0;
+  std::int64_t timestep_max = 0;
+
+  std::size_t natoms_min = 0;
+  std::size_t natoms_max = 0;
+  double natoms_mean = 0.0;
+  double natoms_var = 0.0;
+
+  // Frame-to-frame timestep stride statistics (over the processed sequence).
+  // These help detect irregular output sampling or gaps.
+  std::size_t timestep_delta_samples = 0; // typically frames-1
+  std::int64_t timestep_delta_min = 0;
+  std::int64_t timestep_delta_max = 0;
+  double timestep_delta_mean = 0.0;
+  double timestep_delta_var = 0.0;
+  std::int64_t timestep_delta_mode = 0;
+  std::size_t timestep_delta_mode_count = 0;
+  std::size_t irregular_stride_count = 0; // number of deltas != mode
+  bool is_uniform_stride = true;
+
+  bool box_is_triclinic = false;
+  std::size_t box_changes = 0;
+};
+
 struct OutputFileDescriptor {
   std::string path;                 // relative or absolute
   std::string format = "text";      // "text" for now
@@ -167,6 +198,9 @@ struct ResultsIndex {
   std::size_t frames_processed = 0;
   double wall_seconds = 0.0;
 
+  // Optional: populated once at least one frame has been processed.
+  std::optional<FrameStatsAudit> frame_stats;
+
   // coarse profiling
   double reader_seconds = 0.0;
   double group_setup_seconds = 0.0;
@@ -262,6 +296,33 @@ inline void write_results_json(const fs::path& out_path, const ResultsIndex& idx
 
     ofs << "    \"frames_processed\": " << idx.frames_processed << ",\n";
     ofs << "    \"wall_seconds\": " << std::setprecision(17) << idx.wall_seconds << ",\n";
+
+    // M0: Run-level sampling / integrity stats (computed over processed frames).
+    if (idx.frame_stats) {
+      const auto& fs = *idx.frame_stats;
+      ofs << "    \"frame_stats\": {\n";
+      ofs << "      \"frames\": " << fs.frames << ",\n";
+      ofs << "      \"timestep_first\": " << fs.timestep_first << ",\n";
+      ofs << "      \"timestep_last\": " << fs.timestep_last << ",\n";
+      ofs << "      \"timestep_min\": " << fs.timestep_min << ",\n";
+      ofs << "      \"timestep_max\": " << fs.timestep_max << ",\n";
+      ofs << "      \"natoms_min\": " << fs.natoms_min << ",\n";
+      ofs << "      \"natoms_max\": " << fs.natoms_max << ",\n";
+      ofs << "      \"natoms_mean\": " << std::setprecision(17) << fs.natoms_mean << ",\n";
+      ofs << "      \"natoms_var\": " << std::setprecision(17) << fs.natoms_var << ",\n";
+      ofs << "      \"timestep_delta_samples\": " << fs.timestep_delta_samples << ",\n";
+      ofs << "      \"timestep_delta_min\": " << fs.timestep_delta_min << ",\n";
+      ofs << "      \"timestep_delta_max\": " << fs.timestep_delta_max << ",\n";
+      ofs << "      \"timestep_delta_mean\": " << std::setprecision(17) << fs.timestep_delta_mean << ",\n";
+      ofs << "      \"timestep_delta_var\": " << std::setprecision(17) << fs.timestep_delta_var << ",\n";
+      ofs << "      \"timestep_delta_mode\": " << fs.timestep_delta_mode << ",\n";
+      ofs << "      \"timestep_delta_mode_count\": " << fs.timestep_delta_mode_count << ",\n";
+      ofs << "      \"irregular_stride_count\": " << fs.irregular_stride_count << ",\n";
+      ofs << "      \"is_uniform_stride\": " << (fs.is_uniform_stride ? "true" : "false") << ",\n";
+      ofs << "      \"box_is_triclinic\": " << (fs.box_is_triclinic ? "true" : "false") << ",\n";
+      ofs << "      \"box_changes\": " << fs.box_changes << "\n";
+      ofs << "    },\n";
+    }
 
     // Topology (D)
     ofs << "    \"topology\": {\n";

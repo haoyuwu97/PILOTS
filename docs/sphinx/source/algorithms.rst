@@ -1,5 +1,5 @@
-Reusable algorithm layer (K)
-============================
+Algorithms (K)
+==============
 
 The K-layer contains reusable, dependency-light algorithms that are shared between:
 
@@ -10,7 +10,7 @@ The K-layer contains reusable, dependency-light algorithms that are shared betwe
 * future analysis CLI tools
 
 Key modules (v1)
----------------
+----------------
 
 * Graph views: edge lists and adjacency
 * Components / clusters / percolation primitives

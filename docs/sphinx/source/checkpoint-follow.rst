@@ -1,5 +1,5 @@
-Follow, flush, checkpoint, resume
-=================================
+Streaming & Restart
+===================
 
 PILOTS is designed to run robustly on long HPC jobs.
 

@@ -1,5 +1,5 @@
-Developer notes
-===============
+Dev Notes
+=========
 
 Adding a new measure
 --------------------

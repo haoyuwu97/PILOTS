@@ -1,5 +1,5 @@
-Mapping and backmapping
-=======================
+Mapping
+=======
 
 Mapping converts atom-level trajectories into **bead-level** trajectories
 for AA/UA/complex CG workflows.

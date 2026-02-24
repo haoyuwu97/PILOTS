@@ -1,5 +1,5 @@
-Architecture overview
-=====================
+Architecture
+============
 
 PILOTS is structured as:
 

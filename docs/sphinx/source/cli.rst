@@ -1,5 +1,5 @@
-Command line interface
-======================
+CLI
+===
 
 The ``pilots`` executable supports a small, stable CLI.
 

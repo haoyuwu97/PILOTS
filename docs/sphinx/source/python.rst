@@ -1,5 +1,5 @@
-Python integration (pilotsio)
-============================
+Python
+======
 
 Overview
 --------
@@ -15,7 +15,7 @@ This design keeps the scientific and auditing contract stable:
 ``results.json`` is the interface between C++ and Python.
 
 Install / build the ``pilots`` executable
-----------------------------------------
+----------------------------------------------
 
 Linux
 ^^^^^
@@ -143,7 +143,7 @@ for reproducibility.
    print(df.head())
 
 Validate-only (no side effects)
-------------------------------
+------------------------------------
 
 You can validate a configuration without producing outputs:
 

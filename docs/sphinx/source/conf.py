@@ -19,6 +19,7 @@ release = os.environ.get("PILOTS_VERSION", "dev")
 
 extensions = [
     "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
 ]
 
 templates_path = ["_templates"]
@@ -54,18 +55,5 @@ if repo and "/" in repo:
 
 # Intersphinx (optional; helps link to external docs).
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", "https://docs.python.org/3/objects.inv"),
+    "python": ("https://docs.python.org/3", None),
 }
-
-python_intersphinx = intersphinx_mapping.get("python")
-if (
-    python_intersphinx
-    and isinstance(python_intersphinx, tuple)
-    and len(python_intersphinx) >= 2
-):
-    python_url, python_inventory = python_intersphinx[0], python_intersphinx[1]
-    if not python_inventory or isinstance(python_inventory, dict):
-        intersphinx_mapping["python"] = (
-            python_url,
-            f"{python_url.rstrip('/')}/objects.inv",
-        )

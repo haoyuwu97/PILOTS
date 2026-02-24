@@ -1,5 +1,5 @@
-Measure SDK (L)
-===============
+SDK (L)
+=======
 
 The SDK layer wraps the K-layer algorithms and runner plumbing with:
 

@@ -14,7 +14,7 @@ authoring.
 
 .. toctree::
    :maxdepth: 2
-   :caption: User Guide
+   :caption: Guide
 
    getting-started
    python
@@ -28,9 +28,10 @@ authoring.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Developer Guide
+   :caption: Internals
 
    architecture
    algorithms
    sdk
+   adding-measures
    developer

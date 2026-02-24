@@ -1,5 +1,5 @@
-Configuration file
-==================
+Config
+======
 
 PILOTS is configured via an INI file. The typical structure is:
 

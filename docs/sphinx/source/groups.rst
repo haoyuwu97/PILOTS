@@ -1,5 +1,5 @@
-Groups and selections
-=====================
+Selections
+==========
 
 PILOTS supports two selection inputs:
 
@@ -21,7 +21,7 @@ Atom groups are defined under ``[groups]``. Example:
    slab = region:slab zmin=0 zmax=10
 
 Topology groups
---------------
+---------------
 
 Topology groups are defined under ``[topo_groups]`` and always produce an atom set.
 These require that topology bonds are loaded.

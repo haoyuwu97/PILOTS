@@ -4,11 +4,11 @@
   "run": {
     "model_scale": "auto",
     "dt_unit": "simulation_time",
-    "config_path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/msd.ini",
+    "config_path": "/mnt/data/pilots_v4/PILOTS/tests/configs/msd.ini",
     "config_hash_fnv1a64": "45ee2257ff080f37",
-    "input_path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/data/sample.dump",
+    "input_path": "/mnt/data/pilots_v4/PILOTS/tests/data/sample.dump",
     "config_fingerprint":     {
-      "path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/msd.ini",
+      "path": "/mnt/data/pilots_v4/PILOTS/tests/configs/msd.ini",
       "size_bytes": 301,
       "mtime_epoch_s": 1768389950,
       "hash_kind": "fnv1a64",
@@ -16,7 +16,7 @@
       "hash_fnv1a64": "45ee2257ff080f37"
     },
     "input_fingerprint":     {
-      "path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/data/sample.dump",
+      "path": "/mnt/data/pilots_v4/PILOTS/tests/data/sample.dump",
       "size_bytes": 489,
       "mtime_epoch_s": 1768389950,
       "hash_kind": "fnv1a64",
@@ -30,9 +30,9 @@
       "source_group": "",
       "file": "",
       "file_hash_fnv1a64": "",
-      "spec_hash_fnv1a64": "23cd01ddafd5c96c"
+      "spec_hash_fnv1a64": ""
     },
-    "output_dir": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/_out",
+    "output_dir": "/mnt/data/pilots_v4/PILOTS/tests/configs/_out",
     "dt": 1,
     "threads": 56,
     "follow": false,
@@ -42,7 +42,29 @@
     "resume_from": "",
     "reader_offset": 489,
     "frames_processed": 3,
-    "wall_seconds": 2.4556216050000002,
+    "wall_seconds": 4.9617316650000003,
+    "frame_stats": {
+      "frames": 3,
+      "timestep_first": 0,
+      "timestep_last": 2,
+      "timestep_min": 0,
+      "timestep_max": 2,
+      "natoms_min": 4,
+      "natoms_max": 4,
+      "natoms_mean": 4,
+      "natoms_var": 0,
+      "timestep_delta_samples": 2,
+      "timestep_delta_min": 1,
+      "timestep_delta_max": 1,
+      "timestep_delta_mean": 1,
+      "timestep_delta_var": 0,
+      "timestep_delta_mode": 1,
+      "timestep_delta_mode_count": 2,
+      "irregular_stride_count": 0,
+      "is_uniform_stride": true,
+      "box_is_triclinic": false,
+      "box_changes": 0
+    },
     "topology": {
       "file": "",
       "format": "",
@@ -60,10 +82,10 @@
     }
   },
   "profiling": {
-    "reader_seconds": 0.0061310970000000003,
-    "group_setup_seconds": 0.000147577,
+    "reader_seconds": 0.209723943,
+    "group_setup_seconds": 0.000203804,
     "measures": {
-      "msd": {"on_start_s": 0.00045937300000000001, "on_frame_s": 2.3473265210000003, "finalize_s": 0.098390730999999995, "frames": 3}
+      "msd": {"on_start_s": 0.00028005400000000001, "on_frame_s": 4.5544974539999998, "finalize_s": 0.00069173200000000002, "frames": 3}
     }
   },
   "polymer_classifier": {
@@ -154,7 +176,7 @@
       },
       "outputs": [
         {
-          "path": "/mnt/data/PILOTS_GH_READY/PILOTS/tests/configs/_out/msd_all.dat",
+          "path": "/mnt/data/pilots_v4/PILOTS/tests/configs/_out/msd_all.dat",
           "format": "text",
           "x_axis": "frame",
           "x_unit": "frames",

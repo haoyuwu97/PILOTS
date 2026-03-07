@@ -229,7 +229,7 @@ public:
     output::OutputFileDescriptor od;
     od.path = output_path_;
     od.format = "text";
-    od.x_axis = measure_ext::lag_axis_name(opt_.corr.axis);
+    od.x_axis = pilots::lag_axis_name(opt_.corr.axis);
     od.x_unit = x_unit_for_axis(opt_.corr.axis);
     od.columns = {
         "lag", "time",
@@ -247,7 +247,7 @@ public:
     md.params["frame_start"] = std::to_string(opt_.range.frame_start);
     md.params["frame_end"] = std::to_string(opt_.range.frame_end);
     md.params["correlator"] = opt_.corr.type;
-    md.params["lag_axis"] = measure_ext::lag_axis_name(opt_.corr.axis);
+    md.params["lag_axis"] = pilots::lag_axis_name(opt_.corr.axis);
     return md;
   }
 
@@ -380,7 +380,7 @@ private:
     ofs << "# components: " << components_name_() << "\n";
     ofs << "# q_field: " << opt_.q_field
         << ", vector_fields: (" << opt_.vector_x_field << ',' << opt_.vector_y_field << ',' << opt_.vector_z_field << ")\n";
-    ofs << "# correlator: " << opt_.corr.type << ", lag_axis: " << measure_ext::lag_axis_name(opt_.corr.axis) << "\n";
+    ofs << "# correlator: " << opt_.corr.type << ", lag_axis: " << pilots::lag_axis_name(opt_.corr.axis) << "\n";
     ofs << "# kbt: " << opt_.kbt << "\n";
     ofs << "# columns: lag  time  cjj_xx  cjj_yy  cjj_zz  cjj_trace  sigma_xx  sigma_yy  sigma_zz  sigma_gk  count_pairs  n_blocks  mean_dtimestep\n";
   }
@@ -428,7 +428,7 @@ public:
     output::OutputFileDescriptor od;
     od.path = output_path_;
     od.format = "text";
-    od.x_axis = measure_ext::lag_axis_name(opt_.corr.axis);
+    od.x_axis = pilots::lag_axis_name(opt_.corr.axis);
     od.x_unit = x_unit_for_axis(opt_.corr.axis);
     od.columns = {
         "lag", "time",
@@ -444,7 +444,7 @@ public:
     md.params["frame_start"] = std::to_string(opt_.range.frame_start);
     md.params["frame_end"] = std::to_string(opt_.range.frame_end);
     md.params["correlator"] = opt_.corr.type;
-    md.params["lag_axis"] = measure_ext::lag_axis_name(opt_.corr.axis);
+    md.params["lag_axis"] = pilots::lag_axis_name(opt_.corr.axis);
     return md;
   }
 
@@ -585,7 +585,7 @@ private:
     ofs << "# selection: " << sel_.name << "\n";
     ofs << "# components: " << components_name_() << "\n";
     ofs << "# q_field: " << opt_.q_field << "\n";
-    ofs << "# correlator: " << opt_.corr.type << ", lag_axis: " << measure_ext::lag_axis_name(opt_.corr.axis) << "\n";
+    ofs << "# correlator: " << opt_.corr.type << ", lag_axis: " << pilots::lag_axis_name(opt_.corr.axis) << "\n";
     ofs << "# kbt: " << opt_.kbt << "\n";
     ofs << "# columns: lag  time  m_xx  m_yy  m_zz  m_total  self_xx  self_yy  self_zz  self_total  distinct_total  sigma_xx  sigma_yy  sigma_zz  sigma_total  sigma_self  sigma_distinct  haven_ratio  count_pairs  sem_m_xx  sem_m_yy  sem_m_zz  n_blocks  mean_dtimestep\n";
   }

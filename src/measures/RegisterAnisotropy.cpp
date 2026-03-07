@@ -38,7 +38,6 @@ using measure_ext::count_diag_dims;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::get_static_group_view;
-using measure_ext::lag_axis_name;
 using measure_ext::mass_by_atom_from_config;
 using measure_ext::orth_area_for_axis;
 using measure_ext::parse_axis1d;

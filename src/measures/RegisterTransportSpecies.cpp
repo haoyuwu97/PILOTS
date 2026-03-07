@@ -39,7 +39,6 @@ using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::get_static_group_view;
 using measure_ext::integer_like_field_to_i64;
-using measure_ext::lag_axis_name;
 using measure_ext::resolve_exact_frame_end;
 using measure_ext::resolve_path;
 using measure_ext::x_unit_for_axis;

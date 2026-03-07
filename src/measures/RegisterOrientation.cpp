@@ -42,7 +42,6 @@ using measure_ext::cross;
 using measure_ext::dot;
 using measure_ext::entity_id_per_atom_from_config;
 using measure_ext::get_static_combined_view;
-using measure_ext::lag_axis_name;
 using measure_ext::norm;
 using measure_ext::ordered_chains_from_config;
 using measure_ext::resolve_exact_frame_end;

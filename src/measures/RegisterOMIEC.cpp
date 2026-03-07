@@ -28,7 +28,6 @@ using measure_ext::axis_length;
 using measure_ext::box_volume;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
-using measure_ext::lag_axis_name;
 using measure_ext::mass_by_atom_from_config;
 using measure_ext::parse_axis1d;
 using measure_ext::primary_axis_coord;

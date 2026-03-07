@@ -478,16 +478,8 @@ inline OrderedChains ordered_chains_from_config(const IniConfig& cfg,
         "ordered chain analysis requires chain_pos_field or topology bonds for linear-chain ordering");
   }
   return build_ordered_chains_from_topology(groups, sel, *sysctx.topology, strict_linear);
-
-
-inline std::string lag_axis_name(LagAxis a) {
-  switch (a) {
-    case LagAxis::Frame: return "lag_frames";
-    case LagAxis::Timestep: return "lag_timesteps";
-    case LagAxis::TimeBin: return "lag_time";
-  }
-  return "lag_frames";
 }
+
 
 enum class Axis1D { X = 0, Y = 1, Z = 2 };
 
@@ -672,8 +664,6 @@ inline std::int64_t resolve_finite_frame_end(bool follow,
   const std::int64_t eff = static_cast<std::int64_t>(total_frames - 1);
   if (eff < frame_start) throw std::runtime_error(who + ": effective frame_end < frame_start");
   return eff;
-}
-
 }
 
 } // namespace pilots::measure_ext

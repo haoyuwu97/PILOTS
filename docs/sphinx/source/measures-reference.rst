@@ -1,9 +1,9 @@
 Measures Reference
 ==================
 
-This page is the **measure quick reference** for the current PILOTS source tree plus the
-measure families added in this patch set. It is intended to be maintained together with the
-C++ measure files under ``src/measures/``.
+This page is the **measure quick reference** for the current PILOTS source tree.
+It is organized by measure family and should be updated in the same commit as the
+corresponding C++ files under ``src/measures/``.
 
 For each measure or family, the page records:
 

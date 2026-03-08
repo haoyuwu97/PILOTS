@@ -1,13 +1,13 @@
 Selections
 ==========
 
-PILOTS supports two selection inputs:
+PILOTS supports two selection sources:
 
-* **Atom groups**: ``[groups]`` (based on dump fields, regions, id/type/mol, ...)
-* **Topology groups**: ``[topo_groups]`` (based on topology bonds, components, ...)
+* **Atom groups** from ``[groups]`` based on dump fields, regions, id/type/mol, and similar predicates.
+* **Topology groups** from ``[topo_groups]`` based on bonds, connectivity, components, and related topology-derived queries.
 
-Both are converted into a per-frame **atom set**, and measures can combine them
-using boolean logic.
+Both are converted into a per-frame atom set.
+Measures can combine them with boolean logic at measure scope.
 
 Atom groups
 -----------
@@ -24,7 +24,7 @@ Topology groups
 ---------------
 
 Topology groups are defined under ``[topo_groups]`` and always produce an atom set.
-These require that topology bonds are loaded.
+They require topology bonds to be loaded.
 
 .. code-block:: ini
 
@@ -41,5 +41,5 @@ Each measure may specify:
 * ``topo_group``: topo-group expression (default: ``all``)
 * ``combine``: boolean expression over ``A`` and ``T`` (default: ``A&T``)
 
-The complement operators ``!A`` and ``!T`` are defined with respect to the current
-frame's atom universe.
+The complement operators ``!A`` and ``!T`` are defined with respect to the current frame's atom universe.
+Many time-correlation measures additionally require the resulting selection to be **static** across frames.

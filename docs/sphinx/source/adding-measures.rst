@@ -1,24 +1,23 @@
 Adding a measure
 ================
 
-PILOTS is designed so that adding a new physical observable usually means
-adding a **single C++ file** under ``src/measures/``.
+PILOTS is designed so that adding a new physical observable usually means adding a **single C++ file** under
+``src/measures/``.
+The runner, registry, selection plumbing, and output indexing are already provided by the framework.
 
 The recommended workflow
 ------------------------
 
-1. Copy ``src/measures/template_measure.cpp`` into a new file, e.g.
-   ``src/measures/RegisterAlpha2.cpp``.
+1. Copy ``src/measures/template_measure.cpp`` into a new file, for example ``src/measures/RegisterAlpha2.cpp``.
 2. Implement the physics.
-3. At the bottom of the file, enable registration (one line).
-4. Reference the new measure in the INI config (a ``[measure.<name>]`` section).
-5. Rebuild.
+3. Keep registration in the same translation unit.
+4. Reference the new measure in the INI config with a ``[measure.<name>]`` section.
+5. Rebuild and validate the config.
 
 Single translation unit registration
 ------------------------------------
 
-PILOTS uses an explicit registry. For a new measure type, keep everything in a
-single translation unit:
+PILOTS uses an explicit registry. For a new measure type, keep everything in a single translation unit:
 
 * a ``caps(const MeasureBuildEnv&)`` function,
 * a ``create(const MeasureBuildEnv&, const ParsedSection&)`` factory,
@@ -47,20 +46,18 @@ Every measure should declare:
 Respect --validate-config (dry-run)
 -----------------------------------
 
-When ``--validate-config`` is used, PILOTS instantiates measures and runs
-``on_start()`` to validate requirements. A measure must not create outputs or
-perform filesystem side effects in this mode.
+When ``--validate-config`` is used, PILOTS instantiates measures and runs ``on_start()`` to validate requirements.
+A measure must not create outputs or perform filesystem side effects in this mode.
 
-Use the SDK ``TextWriter`` with ``dry_run`` enabled (it becomes a no-op writer),
-and avoid manual ``mkdir`` calls.
+Use the SDK ``TextWriter`` with ``dry_run`` enabled (it becomes a no-op writer), and avoid manual ``mkdir`` calls.
 
-Example: Non-Gaussian parameter alpha2(t)
------------------------------------------
+Example: Non-Gaussian parameter ``alpha2(t)``
+---------------------------------------------
 
 Definition
 ~~~~~~~~~~
 
-In ``d`` dimensions, the (self) non-Gaussian parameter is
+In ``d`` dimensions, the self non-Gaussian parameter is
 
 .. math::
 
@@ -72,22 +69,20 @@ In 3D (``d=3``):
 
    \alpha_2(t) = \frac{3}{5} \frac{\langle r^4 \rangle}{\langle r^2 \rangle^2} - 1.
 
-This observable depends on two moments as a function of time lag:
-``<r2(t)>`` and ``<r4(t)>``.
+This observable depends on two moments as a function of lag time: ``<r2(t)>`` and ``<r4(t)>``.
 
 Implementation outline in PILOTS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The simplest way to implement ``alpha2(t)`` in the current correlator infrastructure
-is to reuse the T6 correlator:
+The simplest way to implement ``alpha2(t)`` in the current correlator infrastructure is to reuse the T6 correlator:
 
 * push the selected particle positions into the correlator exactly like ``MSDMeasure`` does,
-* provide a PairOp that computes two scalars per lag and stores them in two Tensor6 channels:
+* provide a pair operator that computes two scalars per lag and stores them in two Tensor6 channels:
 
   * ``XX`` = ``<r2>`` (mean over particles at a given time origin)
   * ``YY`` = ``<r4>`` (mean over particles at a given time origin)
 
-Then, at flush time, compute ``alpha2`` from the two stored channels.
+Then compute ``alpha2`` from the two stored channels during flush/output.
 
 Pair operator sketch
 ~~~~~~~~~~~~~~~~~~~~
@@ -153,4 +148,4 @@ Notes
 
 * ``alpha2(t)`` should almost always use static selection.
 * For AA/UA, you will often want bead mapping first, and compute ``alpha2`` on beads rather than atoms.
-* Error bars for ``alpha2(t)`` require more care than MSD (ratio of moments). Start by outputting ``r2`` and ``r4``.
+* Error bars for ``alpha2(t)`` require more care than MSD because it is a ratio of moments. Start by outputting ``r2`` and ``r4``.

@@ -115,7 +115,7 @@ class PilotsResults:
 
         df = pd.read_csv(
             path,
-            delim_whitespace=True,
+            sep=r"\s+",
             comment="#",
             header=None,
             names=cols if cols else None,

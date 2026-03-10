@@ -642,6 +642,13 @@ inline Vec3 safe_unit(const Vec3& a, double eps = 1e-18) {
   return a / n;
 }
 
+inline Vec3 min_image_difference(const pilots::Box& box,
+                                 const Vec3& a,
+                                 const Vec3& b) {
+  const auto d = box.min_image_displacement(b.x, b.y, b.z, a.x, a.y, a.z);
+  return Vec3{d[0], d[1], d[2]};
+}
+
 inline Vec3 atom_vec3(const Frame& frame, std::size_t i) {
   if (i >= frame.natoms) throw std::runtime_error("atom_vec3: atom index out of range");
   return Vec3{frame.xu[i], frame.yu[i], frame.zu[i]};

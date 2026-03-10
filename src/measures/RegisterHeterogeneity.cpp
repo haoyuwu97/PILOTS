@@ -20,6 +20,7 @@
 #endif
 
 #include "MeasureCommon.hpp"
+#include "pilots/alg/graph/Components.hpp"
 #include "pilots/measures/IMeasure.hpp"
 #include "pilots/measures/MeasureRegistry.hpp"
 #include "pilots/select/SelectionView.hpp"
@@ -36,6 +37,7 @@ using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::get_static_group_view;
 using measure_ext::integer_like_field_to_i64;
+using measure_ext::min_image_difference;
 using measure_ext::norm;
 using measure_ext::resolve_path;
 using measure_ext::x_unit_for_axis;
@@ -108,41 +110,10 @@ inline double j0(double x) {
   return std::sin(x) / x;
 }
 
-inline double mic_delta(double d, double L) {
-  if (!(L > 0.0)) return d;
-  return d - L * std::round(d / L);
-}
-
-inline Vec3 mic_vec(const Vec3& a, const Vec3& b, double lx, double ly, double lz) {
-  return Vec3{mic_delta(a.x - b.x, lx), mic_delta(a.y - b.y, ly), mic_delta(a.z - b.z, lz)};
-}
-
 struct StoredFrame {
   std::int64_t timestep = 0;
-  double lx = 0.0, ly = 0.0, lz = 0.0;
+  Box box;
   std::vector<Vec3> pos;
-};
-
-struct DSU {
-  explicit DSU(std::size_t n) : p(n), r(n, 0) {
-    std::iota(p.begin(), p.end(), std::size_t{0});
-  }
-  std::size_t find(std::size_t x) {
-    while (p[x] != x) {
-      p[x] = p[p[x]];
-      x = p[x];
-    }
-    return x;
-  }
-  void unite(std::size_t a, std::size_t b) {
-    a = find(a); b = find(b);
-    if (a == b) return;
-    if (r[a] < r[b]) std::swap(a, b);
-    p[b] = a;
-    if (r[a] == r[b]) ++r[a];
-  }
-  std::vector<std::size_t> p;
-  std::vector<int> r;
 };
 
 class BufferedSelectedPositionsMeasure : public IMeasure {
@@ -193,9 +164,7 @@ public:
 
     StoredFrame sf;
     sf.timestep = frame.timestep;
-    sf.lx = frame.box.lx();
-    sf.ly = frame.box.ly();
-    sf.lz = frame.box.lz();
+    sf.box = frame.box;
     sf.pos.resize(sel_.idx.size());
 #if PILOTS_HAS_OPENMP
 #pragma omp parallel for
@@ -329,7 +298,7 @@ private:
             }
             for (std::size_t i = 0; i < sel_.idx.size(); ++i) {
               for (std::size_t j = i + 1; j < sel_.idx.size(); ++j) {
-                const Vec3 rij = mic_vec(f0.pos[i], f0.pos[j], f0.lx, f0.ly, f0.lz);
+                const Vec3 rij = min_image_difference(f0.box, f0.pos[i], f0.pos[j]);
                 const double r = norm(rij);
                 if (r >= opt2_.r_max) continue;
                 const std::size_t b = static_cast<std::size_t>(std::floor(r / opt2_.dr));
@@ -379,7 +348,7 @@ private:
               double val = self2;
               for (std::size_t i = 0; i < sel_.idx.size(); ++i) {
                 for (std::size_t j = i + 1; j < sel_.idx.size(); ++j) {
-                  const Vec3 rij = mic_vec(f0.pos[i], f0.pos[j], f0.lx, f0.ly, f0.lz);
+                  const Vec3 rij = min_image_difference(f0.box, f0.pos[i], f0.pos[j]);
                   val += 2.0 * dw[i] * dw[j] * j0(opt2_.q_list[qi] * norm(rij));
                 }
               }
@@ -420,7 +389,7 @@ private:
               double val = self2;
               for (std::size_t i = 0; i < sel_.idx.size(); ++i) {
                 for (std::size_t j = i + 1; j < sel_.idx.size(); ++j) {
-                  const Vec3 rij = mic_vec(f0.pos[i], f0.pos[j], f0.lx, f0.ly, f0.lz);
+                  const Vec3 rij = min_image_difference(f0.box, f0.pos[i], f0.pos[j]);
                   val += 2.0 * dw[i] * dw[j] * j0(opt2_.q_list[qi] * norm(rij));
                 }
               }
@@ -555,30 +524,30 @@ private:
             ++norig;
             continue;
           }
-          DSU dsu(nm);
+          alg::graph::EdgeList edge_list;
+          edge_list.n_nodes = nm;
           for (std::size_t a = 0; a < nm; ++a) {
             for (std::size_t b = a + 1; b < nm; ++b) {
               const std::size_t i = mobile[a];
               const std::size_t j = mobile[b];
-              const double d1 = norm(mic_vec(f0.pos[i], f1.pos[j], f0.lx, f0.ly, f0.lz));
-              const double d2 = norm(mic_vec(f0.pos[j], f1.pos[i], f0.lx, f0.ly, f0.lz));
-              if (std::min(d1, d2) <= opt2_.link_cutoff) dsu.unite(a, b);
+              const double d1 = norm(min_image_difference(f0.box, f0.pos[i], f1.pos[j]));
+              const double d2 = norm(min_image_difference(f0.box, f0.pos[j], f1.pos[i]));
+              if (std::min(d1, d2) <= opt2_.link_cutoff) {
+                edge_list.edges.emplace_back(a, b);
+              }
             }
           }
-          std::unordered_map<std::size_t, std::size_t> sizes;
-          for (std::size_t a = 0; a < nm; ++a) ++sizes[dsu.find(a)];
-          double mean_sz = 0.0;
-          std::size_t max_sz = 0;
-          for (const auto& kv : sizes) {
-            mean_sz += static_cast<double>(kv.second);
-            max_sz = std::max(max_sz, kv.second);
-            ++hist[kv.second];
-            ++hist_total;
-          }
-          mean_sz /= static_cast<double>(sizes.size());
+          const alg::graph::GraphView graph(edge_list);
+          const auto comps = alg::graph::compute_components(graph);
+          const auto moments = alg::graph::cluster_moments_0_3(comps);
+          const double mean_sz = (moments.m0 > 0.0) ? (moments.m1 / moments.m0) : 0.0;
+          const std::size_t max_sz = comps.largest_component_size;
+          const auto hist_local = comps.size_histogram();
+          for (const auto& kv : hist_local) hist[kv.first] += kv.second;
+          hist_total += comps.n_components();
           sum_mean += mean_sz;
           sum_max += static_cast<double>(max_sz);
-          sum_nstr += static_cast<double>(sizes.size());
+          sum_nstr += static_cast<double>(comps.n_components());
           sum_nmob += static_cast<double>(nm);
           ++norig;
         }
@@ -674,25 +643,24 @@ private:
           }
           const std::size_t nm = mobile.size();
           if (nm == 0) { ++norig; continue; }
-          DSU dsu(nm);
+          alg::graph::EdgeList edge_list;
+          edge_list.n_nodes = nm;
           for (std::size_t a = 0; a < nm; ++a) {
             for (std::size_t b = a + 1; b < nm; ++b) {
-              const Vec3 rij = mic_vec(f0.pos[mobile[a]], f0.pos[mobile[b]], f0.lx, f0.ly, f0.lz);
-              if (norm(rij) <= opt2_.cluster_cutoff) dsu.unite(a, b);
+              const Vec3 rij = min_image_difference(f0.box, f0.pos[mobile[a]], f0.pos[mobile[b]]);
+              if (norm(rij) <= opt2_.cluster_cutoff) {
+                edge_list.edges.emplace_back(a, b);
+              }
             }
           }
-          std::unordered_map<std::size_t, std::size_t> sizes;
-          for (std::size_t a = 0; a < nm; ++a) ++sizes[dsu.find(a)];
-          double mean_sz = 0.0;
-          std::size_t max_sz = 0;
-          for (const auto& kv : sizes) {
-            mean_sz += static_cast<double>(kv.second);
-            max_sz = std::max(max_sz, kv.second);
-          }
-          mean_sz /= static_cast<double>(sizes.size());
+          const alg::graph::GraphView graph(edge_list);
+          const auto comps = alg::graph::compute_components(graph);
+          const auto moments = alg::graph::cluster_moments_0_3(comps);
+          const double mean_sz = (moments.m0 > 0.0) ? (moments.m1 / moments.m0) : 0.0;
+          const std::size_t max_sz = comps.largest_component_size;
           sum_mean += mean_sz;
           sum_max += static_cast<double>(max_sz);
-          sum_ncl += static_cast<double>(sizes.size());
+          sum_ncl += static_cast<double>(comps.n_components());
           sum_nmob += static_cast<double>(nm);
           ++norig;
         }
@@ -861,7 +829,7 @@ private:
             bool has_excited_neighbor = false;
             for (std::size_t j = 0; j < sel_.idx.size(); ++j) {
               if (i == j || e0[j] == 0) continue;
-              const Vec3 rij = mic_vec(f0.pos[i], f0.pos[j], f0.lx, f0.ly, f0.lz);
+              const Vec3 rij = min_image_difference(f0.box, f0.pos[i], f0.pos[j]);
               if (norm(rij) <= opt2_.neighbor_cutoff) {
                 has_excited_neighbor = true;
                 break;

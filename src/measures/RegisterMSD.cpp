@@ -1,13 +1,11 @@
-#include <cctype>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
+#include "MeasureCommon.hpp"
 #include "pilots/correlate/CorrelatorFactory.hpp"
 #include "pilots/measures/MSDMeasure.hpp"
 #include "pilots/measures/MeasureRegistry.hpp"
@@ -17,46 +15,11 @@ namespace fs = std::filesystem;
 namespace pilots {
 namespace {
 
-fs::path resolve_path(const fs::path& base_dir, const std::string& p) {
-  fs::path path(p);
-  if (path.is_absolute()) return path;
-  return (base_dir / path).lexically_normal();
-}
-
-int parse_diag_mask(const std::string& s_raw) {
-  std::string s = s_raw;
-  for (auto& c : s) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
-  // Tensor-style names
-  if (s == "xxyyzz" || s == "all") return 7;
-  if (s == "xx") return 1;
-  if (s == "yy") return 2;
-  if (s == "zz") return 4;
-  if (s == "xxyy") return 3;
-  if (s == "xxzz") return 5;
-  if (s == "yyzz") return 6;
-  // Backward-compatible aliases
-  if (s == "xyz") return 7;
-  if (s == "x") return 1;
-  if (s == "y") return 2;
-  if (s == "z") return 4;
-  if (s == "xy") return 3;
-  if (s == "xz") return 5;
-  if (s == "yz") return 6;
-  throw std::runtime_error("invalid components string: '" + s_raw + "' (use xxyyzz, xx, yy, zz, xxyy, xxzz, yyzz)");
-}
-
-std::size_t count_lammps_frames(const std::string& path) {
-  std::ifstream ifs(path);
-  if (!ifs) {
-    throw std::runtime_error("failed to open input for frame count: " + path);
-  }
-  std::string line;
-  std::size_t n = 0;
-  while (std::getline(ifs, line)) {
-    if (line.rfind("ITEM: TIMESTEP", 0) == 0) ++n;
-  }
-  return n;
-}
+using measure_ext::get_static_combined_view;
+using measure_ext::get_static_group_view;
+using measure_ext::parse_diag_mask;
+using measure_ext::resolve_exact_frame_end;
+using measure_ext::resolve_path;
 
 MeasureCapabilities msd_caps(const IniConfig& cfg,
                             const std::string& section,
@@ -118,41 +81,27 @@ std::unique_ptr<IMeasure> msd_create(const IniConfig& cfg,
   }
   const fs::path out_path = (output_dir / out_file).lexically_normal();
 
-  // Resolve effective frame_end for correlator=exact (finite window required).
-  std::int64_t frame_end_eff = frame_end;
-  if (corr_spec.type == "exact") {
-    if (env.follow) {
-      throw std::runtime_error("correlator=exact is not supported in follow mode (frame_end is unbounded). Use correlator=multitau.");
-    }
-    if (frame_end_eff < 0) {
-      const std::size_t total_frames = count_lammps_frames(env.input_path.string());
-      if (total_frames == 0) throw std::runtime_error("input contains 0 frames");
-      frame_end_eff = static_cast<std::int64_t>(total_frames - 1);
-    }
-  }
+  const std::int64_t frame_end_eff = resolve_exact_frame_end(
+      corr_spec, env.follow, frame_start, frame_end, env.input_path);
 
   const int diag_mask = parse_diag_mask(comp_s);
 
   // Selections (AtomGroup + TopoGroup + combine).
   // MSD is scientifically meaningful only for identity-consistent, static selections.
-  if (env.selection_provider->is_dynamic_spec(group_ref, topo_group_ref)) {
-    throw std::runtime_error("MSD requires a static selection; the selection spec depends on a dynamic group/topo_group");
-  }
-  SelectionView sel = env.selection_provider->get_combined_view(frame0, 0, group_ref, topo_group_ref, combine_expr);
+  SelectionView sel = get_static_combined_view(
+      *env.selection_provider, frame0, group_ref, topo_group_ref, combine_expr, "MSD");
 
   SelectionView drift_sel;
   if (remove_drift) {
-    if (env.selection_provider->is_dynamic_spec(drift_group_ref, "all")) {
-      throw std::runtime_error("MSD drift_group requires static selection; drift_group depends on a dynamic group");
-    }
-    drift_sel = env.selection_provider->get_combined_view(frame0, 0, drift_group_ref, "all", "A");
+    drift_sel = get_static_group_view(
+        *env.selection_provider, frame0, drift_group_ref, "MSD");
   } else {
-    drift_sel = env.selection_provider->get_combined_view(frame0, 0, "all", "all", "A");
+    drift_sel = get_static_group_view(*env.selection_provider, frame0, "all", "MSD");
   }
 
   MSDMeasure::Options opt;
   opt.frame_start = frame_start;
-  opt.frame_end = (corr_spec.type == "exact") ? frame_end_eff : frame_end;
+  opt.frame_end = frame_end_eff;
   opt.diag_mask = diag_mask;
   opt.remove_drift = remove_drift;
   opt.corr = corr_spec;

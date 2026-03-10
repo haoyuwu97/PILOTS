@@ -21,6 +21,7 @@
 #endif
 
 #include "MeasureCommon.hpp"
+#include "pilots/alg/graph/Components.hpp"
 #include "pilots/measures/IMeasure.hpp"
 #include "pilots/measures/MeasureRegistry.hpp"
 #include "pilots/select/SelectionView.hpp"
@@ -31,9 +32,13 @@ namespace fs = std::filesystem;
 namespace pilots {
 namespace {
 
-using measure_ext::integer_like_field_to_i64;
 using measure_ext::get_static_combined_view;
 using measure_ext::get_static_group_view;
+using measure_ext::integer_like_field_to_i64;
+using measure_ext::Vec3;
+using measure_ext::dot;
+using measure_ext::min_image_difference;
+using measure_ext::norm;
 using measure_ext::resolve_path;
 using measure_ext::same_index_set;
 
@@ -49,29 +54,6 @@ inline bool frame_in_range(std::size_t frame_index, const RangeOptions& opt) {
   if (opt.frame_end >= 0 && fi > opt.frame_end) return false;
   return true;
 }
-
-inline double mic_delta(double d, double L) {
-  if (!(L > 0.0)) return d;
-  return d - L * std::round(d / L);
-}
-
-struct Vec3 { double x = 0.0, y = 0.0, z = 0.0; };
-inline Vec3 operator-(const Vec3& a, const Vec3& b) { return Vec3{a.x - b.x, a.y - b.y, a.z - b.z}; }
-inline Vec3 operator+(const Vec3& a, const Vec3& b) { return Vec3{a.x + b.x, a.y + b.y, a.z + b.z}; }
-inline Vec3 operator*(double s, const Vec3& a) { return Vec3{s * a.x, s * a.y, s * a.z}; }
-inline double dot(const Vec3& a, const Vec3& b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
-inline double norm(const Vec3& a) { return std::sqrt(dot(a,a)); }
-inline Vec3 mic_vec(const Vec3& a, const Vec3& b, double lx, double ly, double lz) {
-  return Vec3{mic_delta(a.x - b.x, lx), mic_delta(a.y - b.y, ly), mic_delta(a.z - b.z, lz)};
-}
-
-struct DSU {
-  explicit DSU(std::size_t n) : p(n), r(n, 0) { for (std::size_t i = 0; i < n; ++i) p[i] = i; }
-  std::size_t find(std::size_t x) { while (p[x] != x) { p[x] = p[p[x]]; x = p[x]; } return x; }
-  void unite(std::size_t a, std::size_t b) { a = find(a); b = find(b); if (a == b) return; if (r[a] < r[b]) std::swap(a,b); p[b] = a; if (r[a] == r[b]) ++r[a]; }
-  std::vector<std::size_t> p;
-  std::vector<int> r;
-};
 
 inline long double fact_int(int n) {
   if (n < 0) return 0.0L;
@@ -204,7 +186,7 @@ FrameDescriptors compute_descriptors(const Frame& frame,
     int cn = 0;
     for (const std::size_t j : nbr_sel.idx) {
       if (same && j == i) continue;
-      const Vec3 rij = mic_vec(pos[j], pos[i], frame.box.lx(), frame.box.ly(), frame.box.lz());
+      const Vec3 rij = min_image_difference(frame.box, pos[j], pos[i]);
       const double r2 = dot(rij, rij);
       if (r2 <= 0.0 || r2 > rc2) continue;
       ++cn;
@@ -487,23 +469,24 @@ public:
     std::size_t max_cluster = 0;
     std::size_t n_clusters = 0;
     if (opt_.cluster_cutoff > 0.0 && !lfs_pos.empty()) {
-      DSU dsu(lfs_pos.size());
+      alg::graph::EdgeList edge_list;
+      edge_list.n_nodes = lfs_pos.size();
       for (std::size_t a = 0; a < lfs_pos.size(); ++a) {
         for (std::size_t b = a + 1; b < lfs_pos.size(); ++b) {
           const std::size_t ia = sel_.idx[lfs_pos[a]];
           const std::size_t ib = sel_.idx[lfs_pos[b]];
           const Vec3 ra = pos[ia], rb = pos[ib];
-          if (norm(mic_vec(ra, rb, frame.box.lx(), frame.box.ly(), frame.box.lz())) <= opt_.cluster_cutoff) dsu.unite(a,b);
+          if (norm(min_image_difference(frame.box, ra, rb)) <= opt_.cluster_cutoff) {
+            edge_list.edges.emplace_back(a, b);
+          }
         }
       }
-      std::unordered_map<std::size_t, std::size_t> sizes;
-      for (std::size_t a = 0; a < lfs_pos.size(); ++a) ++sizes[dsu.find(a)];
-      n_clusters = sizes.size();
-      for (const auto& kv : sizes) {
-        mean_cluster += static_cast<double>(kv.second);
-        max_cluster = std::max(max_cluster, kv.second);
-      }
-      mean_cluster /= static_cast<double>(n_clusters);
+      const alg::graph::GraphView graph(edge_list);
+      const auto comps = alg::graph::compute_components(graph);
+      const auto moments = alg::graph::cluster_moments_0_3(comps);
+      n_clusters = comps.n_components();
+      mean_cluster = (moments.m0 > 0.0) ? (moments.m1 / moments.m0) : 0.0;
+      max_cluster = comps.largest_component_size;
     }
     LFSRecord r;
     r.frame_index = frame_index;

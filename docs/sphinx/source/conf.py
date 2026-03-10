@@ -35,7 +35,8 @@ try:
 except Exception:
     html_theme = "alabaster"
 
-html_static_path = ["_static"]
+_static_dir = os.path.join(os.path.dirname(__file__), "_static")
+html_static_path = ["_static"] if os.path.isdir(_static_dir) else []
 
 html_title = "PILOTS Manual"
 

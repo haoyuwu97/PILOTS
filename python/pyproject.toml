@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "Pure-Python wrapper for the PILOTS trajectory analysis runner"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = {text = "GPL-3.0"}
 authors = [{name = "PILOTS contributors"}]
 keywords = ["molecular-dynamics", "trajectory-analysis", "lammps", "physics", "polymer"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
   "Operating System :: OS Independent",
 ]
 dependencies = []

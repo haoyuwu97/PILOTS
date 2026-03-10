@@ -553,11 +553,7 @@ std::unique_ptr<IMeasure> create_two_time_measure(const IniConfig& cfg,
       ? get_static_group_view(*env.selection_provider, frame0, drift_group, type_name)
       : get_static_group_view(*env.selection_provider, frame0, "all", type_name);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>(type_name + std::string(".dat")))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", type_name + std::string(".dat"));
 
   TwoTimeOptions opt = parse_two_time_options(cfg, section, env, type_name, mode);
   return std::make_unique<TwoTimeMeasure>(std::move(type_name), instance, out.string(), sel, drift_sel, mode, std::move(opt));

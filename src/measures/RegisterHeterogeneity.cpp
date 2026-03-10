@@ -32,6 +32,7 @@ namespace pilots {
 namespace {
 
 using measure_ext::Vec3;
+using measure_ext::append_integer_like_field_cap;
 using measure_ext::atom_vec3;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
@@ -900,11 +901,7 @@ std::unique_ptr<IMeasure> create_four_point_like(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, type_name)
                                          : get_static_group_view(*env.selection_provider, frame0, "all", type_name);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>(type_name + std::string(".dat")))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", type_name + std::string(".dat"));
 
   FourPointMeasure::Options opt;
   opt.base.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -962,11 +959,7 @@ std::unique_ptr<IMeasure> create_string_like(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, type_name)
                                          : get_static_group_view(*env.selection_provider, frame0, "all", type_name);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>(type_name + std::string(".dat")))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", type_name + std::string(".dat"));
 
   StringMeasure::Options opt;
   opt.base.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -1011,11 +1004,7 @@ std::unique_ptr<IMeasure> mobile_cluster_create(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, "mobile_cluster")
                                          : get_static_group_view(*env.selection_provider, frame0, "all", "mobile_cluster");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("mobile_cluster.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "mobile_cluster.dat");
 
   MobileClusterMeasure::Options opt;
   opt.base.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -1033,7 +1022,7 @@ MeasureCapabilities excitation_map_caps(const IniConfig& cfg,
                                         const std::string& instance,
                                         const MeasureBuildEnv& env) {
   MeasureCapabilities caps = buffered_pos_caps(cfg, section, instance, env);
-  caps.requires_intfields.push_back(cfg.get_string(section, "id_field", std::optional<std::string>("id")));
+  append_integer_like_field_cap(caps, cfg.get_string(section, "id_field", std::optional<std::string>("id")));
   return caps;
 }
 
@@ -1053,11 +1042,7 @@ std::unique_ptr<IMeasure> excitation_map_create(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, "excitation_map")
                                          : get_static_group_view(*env.selection_provider, frame0, "all", "excitation_map");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("excitation_map.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "excitation_map.dat");
   const std::string id_field = cfg.get_string(section, "id_field", std::optional<std::string>("id"));
   const auto ids = integer_like_field_to_i64(frame0, id_field, true);
 
@@ -1089,11 +1074,7 @@ std::unique_ptr<IMeasure> facilitation_acf_create(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, "facilitation_acf")
                                          : get_static_group_view(*env.selection_provider, frame0, "all", "facilitation_acf");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("facilitation_acf.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "facilitation_acf.dat");
 
   FacilitationACFMeasure::Options opt;
   opt.base.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));

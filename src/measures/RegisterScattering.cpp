@@ -966,11 +966,7 @@ fs::path resolve_output_path(const IniConfig& cfg,
                              const std::string& section,
                              const MeasureBuildEnv& env,
                              const std::string& default_name) {
-  const std::string out_file = cfg.get_string(section, "output", std::optional<std::string>(default_name));
-  const std::string outdir_s = cfg.get_string(section, "output_dir", std::optional<std::string>(""));
-  const fs::path output_dir = outdir_s.empty() ? env.output_dir_general : resolve_path(env.cfg_dir, outdir_s);
-  if (!env.dry_run) fs::create_directories(output_dir);
-  return (output_dir / out_file).lexically_normal();
+  return measure_ext::resolve_measure_output_path(cfg, section, env, "output", default_name);
 }
 
 MeasureCapabilities self_isf_caps(const IniConfig& cfg,

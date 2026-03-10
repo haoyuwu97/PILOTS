@@ -869,9 +869,7 @@ std::unique_ptr<IMeasure> directional_msd_create(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, "directional_msd")
                                          : get_static_group_view(*env.selection_provider, frame0, "all", "directional_msd");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("directional_msd.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "directional_msd.dat");
   DirectionalMSDMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = resolve_exact_frame_end(parse_correlator_spec(cfg, section, env.dt), env.follow,
@@ -906,9 +904,7 @@ std::unique_ptr<IMeasure> directional_isf_create(const IniConfig& cfg,
   const std::string drift_group = cfg.get_string(section, "drift_group", std::optional<std::string>("all"));
   SelectionView drift_sel = remove_drift ? get_static_group_view(*env.selection_provider, frame0, drift_group, "directional_isf")
                                          : get_static_group_view(*env.selection_provider, frame0, "all", "directional_isf");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("directional_isf.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "directional_isf.dat");
   DirectionalISFMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = resolve_exact_frame_end(parse_correlator_spec(cfg, section, env.dt), env.follow,
@@ -944,9 +940,7 @@ std::unique_ptr<IMeasure> slab_rdf_create(const IniConfig& cfg,
   const std::string comb_b = cfg.get_string(section, "combine_b", std::optional<std::string>(comb_a));
   SelectionView sel_a = get_static_combined_view(*env.selection_provider, frame0, group_a, topo_a, comb_a, "slab_rdf");
   SelectionView sel_b = get_static_combined_view(*env.selection_provider, frame0, group_b, topo_b, comb_b, "slab_rdf");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("slab_rdf.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "slab_rdf.dat");
   SlabRDFMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
@@ -978,9 +972,7 @@ std::unique_ptr<IMeasure> cylindrical_profile_create(const IniConfig& cfg,
   const auto mode = parse_weight_mode(cfg.get_string(section, "mode", std::optional<std::string>("number")));
   std::vector<double> mass_by_atom(frame0.natoms, 1.0);
   if (mode == WeightMode::Mass) mass_by_atom = mass_by_atom_from_config(cfg, section, frame0, sysctx);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("cylindrical_profile.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "cylindrical_profile.dat");
   CylindricalProfileMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
@@ -1013,9 +1005,7 @@ std::unique_ptr<IMeasure> map2d_create(const IniConfig& cfg,
   const auto mode = parse_weight_mode(cfg.get_string(section, "mode", std::optional<std::string>("number")));
   std::vector<double> mass_by_atom(frame0.natoms, 1.0);
   if (mode == WeightMode::Mass) mass_by_atom = mass_by_atom_from_config(cfg, section, frame0, sysctx);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("2d_map.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "2d_map.dat");
   Map2DMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
@@ -1050,9 +1040,7 @@ std::unique_ptr<IMeasure> interface_excess_create(const IniConfig& cfg,
   const auto mode = parse_weight_mode(cfg.get_string(section, "mode", std::optional<std::string>("number")));
   std::vector<double> mass_by_atom(frame0.natoms, 1.0);
   if (mode == WeightMode::Mass) mass_by_atom = mass_by_atom_from_config(cfg, section, frame0, sysctx);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("interface_excess.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "interface_excess.dat");
   InterfaceExcessMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));

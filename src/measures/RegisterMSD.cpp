@@ -68,18 +68,12 @@ std::unique_ptr<IMeasure> msd_create(const IniConfig& cfg,
 
   const std::int64_t frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   const std::int64_t frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
-  const std::string out_file = cfg.get_string(section, "output", std::optional<std::string>("msd.dat"));
-  const std::string outdir_s = cfg.get_string(section, "output_dir", std::optional<std::string>(""));
   const std::string comp_s = cfg.get_string(section, "components", std::optional<std::string>("xxyyzz"));
 
   if (frame_start < 0) throw std::runtime_error("frame_start must be >= 0");
   if (frame_end >= 0 && frame_end < frame_start) throw std::runtime_error("frame_end must be -1 or >= frame_start");
 
-  const fs::path output_dir = outdir_s.empty() ? env.output_dir_general : resolve_path(env.cfg_dir, outdir_s);
-  if (!env.dry_run) {
-    fs::create_directories(output_dir);
-  }
-  const fs::path out_path = (output_dir / out_file).lexically_normal();
+  const fs::path out_path = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "msd.dat");
 
   const std::int64_t frame_end_eff = resolve_exact_frame_end(
       corr_spec, env.follow, frame_start, frame_end, env.input_path);

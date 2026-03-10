@@ -33,6 +33,7 @@ namespace pilots {
 namespace {
 
 using measure_ext::get_static_combined_view;
+using measure_ext::append_integer_like_field_cap;
 using measure_ext::get_static_group_view;
 using measure_ext::integer_like_field_to_i64;
 using measure_ext::Vec3;
@@ -809,8 +810,7 @@ std::unique_ptr<IMeasure> q4_q6_w6_create(const IniConfig& cfg,
   SelectionView nbr_sel = cfg.has_key(section, "neighbor_group")
       ? get_static_group_view(*env.selection_provider, frame0, cfg.get_string(section, "neighbor_group"), "q4_q6_w6")
       : sel;
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
+  const fs::path output_dir = measure_ext::resolve_measure_output_dir(cfg, section, env);
   const fs::path sum = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("q4_q6_w6.dat"))).lexically_normal();
   const fs::path per = (output_dir / cfg.get_string(section, "output_per_particle", std::optional<std::string>("q4_q6_w6_per_particle.dat"))).lexically_normal();
   const auto ids = integer_like_field_to_i64(frame0, cfg.get_string(section, "id_field", std::optional<std::string>("id")), true);
@@ -828,7 +828,7 @@ MeasureCapabilities q4_q6_w6_caps(const IniConfig& cfg,
                                   const std::string& section,
                                   const std::string& instance,
                                   const MeasureBuildEnv& env) {
-  (void)instance; (void)env; MeasureCapabilities caps; append_local_caps(cfg, section, caps); caps.requires_intfields.push_back(cfg.get_string(section, "id_field", std::optional<std::string>("id"))); return caps; }
+  (void)instance; (void)env; MeasureCapabilities caps; append_local_caps(cfg, section, caps); append_integer_like_field_cap(caps, cfg.get_string(section, "id_field", std::optional<std::string>("id"))); return caps; }
 
 std::unique_ptr<IMeasure> lfs_create(const IniConfig& cfg,
                                      const std::string& section,
@@ -845,9 +845,7 @@ std::unique_ptr<IMeasure> lfs_create(const IniConfig& cfg,
   SelectionView nbr_sel = cfg.has_key(section, "neighbor_group")
       ? get_static_group_view(*env.selection_provider, frame0, cfg.get_string(section, "neighbor_group"), "locally_favored_structure")
       : sel;
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("locally_favored_structure.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "locally_favored_structure.dat");
   LFSMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
@@ -889,9 +887,7 @@ std::unique_ptr<IMeasure> voronoi_create(const IniConfig& cfg,
   const std::string topo = cfg.get_string(section, "topo_group", std::optional<std::string>("all"));
   const std::string comb = cfg.get_string(section, "combine", std::optional<std::string>("A&T"));
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, "voronoi_volume");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("voronoi_volume.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "voronoi_volume.dat");
   FieldStatsMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
@@ -919,9 +915,7 @@ std::unique_ptr<IMeasure> free_volume_create(const IniConfig& cfg,
   const std::string topo = cfg.get_string(section, "topo_group", std::optional<std::string>("all"));
   const std::string comb = cfg.get_string(section, "combine", std::optional<std::string>("A&T"));
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, "free_volume");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("free_volume.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "free_volume.dat");
   FieldStatsMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
@@ -939,7 +933,7 @@ MeasureCapabilities softness_caps(const IniConfig& cfg,
                                   const std::string& section,
                                   const std::string& instance,
                                   const MeasureBuildEnv& env) {
-  (void)instance; (void)env; MeasureCapabilities caps; append_local_caps(cfg, section, caps); caps.requires_intfields.push_back(cfg.get_string(section, "id_field", std::optional<std::string>("id"))); if (cfg.has_key(section, "free_volume_field")) caps.requires_dfields.push_back(cfg.get_string(section, "free_volume_field")); if (cfg.has_key(section, "voronoi_volume_field")) caps.requires_dfields.push_back(cfg.get_string(section, "voronoi_volume_field")); if (cfg.has_key(section, "excluded_volume_field")) caps.requires_dfields.push_back(cfg.get_string(section, "excluded_volume_field")); if (cfg.has_key(section, "radius_field")) caps.requires_dfields.push_back(cfg.get_string(section, "radius_field")); return caps; }
+  (void)instance; (void)env; MeasureCapabilities caps; append_local_caps(cfg, section, caps); append_integer_like_field_cap(caps, cfg.get_string(section, "id_field", std::optional<std::string>("id"))); if (cfg.has_key(section, "free_volume_field")) caps.requires_dfields.push_back(cfg.get_string(section, "free_volume_field")); if (cfg.has_key(section, "voronoi_volume_field")) caps.requires_dfields.push_back(cfg.get_string(section, "voronoi_volume_field")); if (cfg.has_key(section, "excluded_volume_field")) caps.requires_dfields.push_back(cfg.get_string(section, "excluded_volume_field")); if (cfg.has_key(section, "radius_field")) caps.requires_dfields.push_back(cfg.get_string(section, "radius_field")); return caps; }
 
 std::unique_ptr<IMeasure> softness_create(const IniConfig& cfg,
                                           const std::string& section,
@@ -956,8 +950,7 @@ std::unique_ptr<IMeasure> softness_create(const IniConfig& cfg,
   SelectionView nbr_sel = cfg.has_key(section, "neighbor_group")
       ? get_static_group_view(*env.selection_provider, frame0, cfg.get_string(section, "neighbor_group"), "softness_proxy")
       : sel;
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty() ? env.output_dir_general : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
+  const fs::path output_dir = measure_ext::resolve_measure_output_dir(cfg, section, env);
   const fs::path sum = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("softness_proxy.dat"))).lexically_normal();
   const fs::path per = (output_dir / cfg.get_string(section, "output_per_particle", std::optional<std::string>("softness_proxy_per_particle.dat"))).lexically_normal();
   const auto ids = integer_like_field_to_i64(frame0, cfg.get_string(section, "id_field", std::optional<std::string>("id")), true);

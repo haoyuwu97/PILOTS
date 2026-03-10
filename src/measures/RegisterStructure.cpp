@@ -875,11 +875,7 @@ std::unique_ptr<IMeasure> rdf_create(const IniConfig& cfg,
   SelectionView sel_a = get_static_combined_view(*env.selection_provider, frame0, group_a, topo_a, comb_a, "rdf");
   SelectionView sel_b = get_static_combined_view(*env.selection_provider, frame0, group_b, topo_b, comb_b, "rdf");
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("rdf.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "rdf.dat");
 
   RDFMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -916,11 +912,7 @@ std::unique_ptr<IMeasure> sq_static_create(const IniConfig& cfg,
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, "static_structure_factor");
 
   const auto q_values = q_values_from_config(cfg, section);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("static_structure_factor.dat"))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "static_structure_factor.dat");
 
   RangeOptions range;
   range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -963,12 +955,8 @@ std::unique_ptr<IMeasure> dynsf_create(const IniConfig& cfg,
       : get_static_group_view(*env.selection_provider, frame0, "all", "dynamic_structure_factor drift_group");
 
   const auto q_values = q_values_from_config(cfg, section);
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
   const std::string default_name = (cfg.get_string(section, "type") == "coherent_isf") ? "coherent_isf.dat" : "dynamic_structure_factor.dat";
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>(default_name))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", default_name);
 
   DynamicStructureFactorMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -1014,12 +1002,8 @@ std::unique_ptr<IMeasure> vanhove_create(const IniConfig& cfg,
       : get_static_group_view(*env.selection_provider, frame0, "all", "van_hove drift_group");
 
   const std::string type_s = cfg.get_string(section, "type");
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
   const std::string default_name = (type_s == "van_hove_self") ? "van_hove_self.dat" : "van_hove_distinct.dat";
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>(default_name))).lexically_normal();
+  const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", default_name);
 
   VanHoveMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));

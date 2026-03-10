@@ -38,6 +38,26 @@ inline fs::path resolve_path(const fs::path& base_dir, const std::string& p) {
   return (base_dir / path).lexically_normal();
 }
 
+template <class EnvLike>
+inline fs::path resolve_measure_output_dir(const IniConfig& cfg,
+                                           const std::string& section,
+                                           const EnvLike& env) {
+  const std::string outdir_s = cfg.get_string(section, "output_dir", std::optional<std::string>(""));
+  const fs::path output_dir = outdir_s.empty() ? env.output_dir_general : resolve_path(env.cfg_dir, outdir_s);
+  if (!env.dry_run) fs::create_directories(output_dir);
+  return output_dir;
+}
+
+template <class EnvLike>
+inline fs::path resolve_measure_output_path(const IniConfig& cfg,
+                                            const std::string& section,
+                                            const EnvLike& env,
+                                            const std::string& key,
+                                            const std::string& default_name) {
+  return (resolve_measure_output_dir(cfg, section, env)
+          / cfg.get_string(section, key, std::optional<std::string>(default_name))).lexically_normal();
+}
+
 inline std::string dstr(double v) {
   std::ostringstream oss;
   oss.precision(17);
@@ -210,13 +230,29 @@ inline std::vector<std::int64_t> dfield_to_i64(std::span<const double> src,
   return out;
 }
 
+template <class CapsLike>
+inline void append_integer_like_field_cap(CapsLike& caps,
+                                          const std::string& field) {
+  if (field == "id" || field == "mol") {
+    caps.requires_i64fields.push_back(field);
+  } else if (field == "type") {
+    caps.requires_intfields.push_back(field);
+  } else {
+    caps.requires_dfields.push_back(field);
+  }
+}
+
+inline std::vector<std::int64_t> integer_like_field_to_i64(const Frame& frame,
+                                                           const std::string& field,
+                                                           bool strict_integer = true);
+
 inline std::vector<std::int64_t> chain_id_per_atom_from_config(const IniConfig& cfg,
                                                                const std::string& section,
                                                                const Frame& frame0,
                                                                const SystemContext& sysctx) {
   if (cfg.has_key(section, "chain_id_field")) {
     const std::string field = cfg.get_string(section, "chain_id_field");
-    return dfield_to_i64(frame0.require_dfield(field), field, true);
+    return integer_like_field_to_i64(frame0, field, true);
   }
 
   if (frame0.has_mol) {
@@ -545,7 +581,7 @@ inline double shell_volume_3d(double rlo, double rhi) {
 
 inline std::vector<std::int64_t> integer_like_field_to_i64(const Frame& frame,
                                                            const std::string& field,
-                                                           bool strict_integer = true) {
+                                                           bool strict_integer) {
   if (field == "id" || field == "mol") {
     const auto v = frame.require_i64field(field);
     return std::vector<std::int64_t>(v.begin(), v.end());

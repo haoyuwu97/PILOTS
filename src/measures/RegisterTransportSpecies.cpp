@@ -34,13 +34,15 @@ namespace pilots {
 namespace {
 
 using measure_ext::Vec3;
+using measure_ext::append_integer_like_field_cap;
 using measure_ext::count_diag_dims;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::get_static_group_view;
 using measure_ext::integer_like_field_to_i64;
 using measure_ext::resolve_exact_frame_end;
-using measure_ext::resolve_path;
+using measure_ext::resolve_measure_output_dir;
+using measure_ext::resolve_measure_output_path;
 using measure_ext::x_unit_for_axis;
 
 struct RangeOptions {
@@ -891,13 +893,7 @@ void append_species_transport_caps(const IniConfig& cfg,
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
   if (cfg.has_key(section, "drift_group")) caps.group_refs.push_back(cfg.get_string(section, "drift_group"));
   const std::string species_field = cfg.get_string(section, "species_field", std::optional<std::string>("type"));
-  if (species_field == "type") {
-    caps.requires_intfields.push_back("type");
-  } else if (species_field == "id" || species_field == "mol") {
-    caps.requires_i64fields.push_back(species_field);
-  } else {
-    caps.requires_dfields.push_back(species_field);
-  }
+  append_integer_like_field_cap(caps, species_field);
 }
 
 std::unique_ptr<IMeasure> create_species_tensor(const IniConfig& cfg,
@@ -923,12 +919,8 @@ std::unique_ptr<IMeasure> create_species_tensor(const IniConfig& cfg,
   const auto species_per_atom = integer_like_field_to_i64(frame0, species_field, true);
   SpeciesGroups species = build_species_groups(sel, species_per_atom);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
   const std::string default_out = (mode == SpeciesTensorMode::MSD) ? (type_name + std::string(".dat")) : "vacf.dat";
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>(default_out))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", default_out);
 
   SpeciesTensorOptions opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -1024,11 +1016,7 @@ std::unique_ptr<IMeasure> species_current_corr_create(const IniConfig& cfg,
   const auto species_per_atom = integer_like_field_to_i64(frame0, species_field, true);
   SpeciesGroups species = build_species_groups(sel, species_per_atom);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("species_current_corr.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "species_current_corr.dat");
 
   SpeciesCurrentCorrMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -1074,10 +1062,7 @@ std::unique_ptr<IMeasure> create_onsager_like(const IniConfig& cfg,
   const auto species_per_atom = integer_like_field_to_i64(frame0, species_field, true);
   SpeciesGroups species = build_species_groups(sel, species_per_atom);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
+  const fs::path output_dir = resolve_measure_output_dir(cfg, section, env);
   const fs::path out_matrix = (output_dir / cfg.get_string(section, "output_matrix", std::optional<std::string>(type_name + std::string("_matrix.dat")))).lexically_normal();
   const fs::path out_t = (output_dir / cfg.get_string(section, "output_transference", std::optional<std::string>(type_name + std::string("_transference.dat")))).lexically_normal();
 

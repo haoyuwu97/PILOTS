@@ -22,6 +22,7 @@ namespace pilots {
 namespace {
 
 using measure_ext::SelectedChains;
+using measure_ext::append_integer_like_field_cap;
 using measure_ext::OrderedChains;
 using measure_ext::build_selected_chains;
 using measure_ext::chain_id_per_atom_from_config;
@@ -30,7 +31,7 @@ using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::ordered_chains_from_config;
 using measure_ext::parse_diag_mask;
-using measure_ext::resolve_path;
+using measure_ext::resolve_measure_output_path;
 
 struct RGReeOptions {
   std::int64_t frame_start = 0;
@@ -238,7 +239,7 @@ void append_chain_membership_caps(const IniConfig& cfg,
                                   const MeasureBuildEnv& env,
                                   MeasureCapabilities& caps) {
   if (cfg.has_key(section, "chain_id_field")) {
-    caps.requires_dfields.push_back(cfg.get_string(section, "chain_id_field"));
+    append_integer_like_field_cap(caps, cfg.get_string(section, "chain_id_field"));
     return;
   }
   if (env.first_frame && env.first_frame->has_mol) {
@@ -297,11 +298,7 @@ std::unique_ptr<IMeasure> rg_ree_create(const IniConfig& cfg,
   }
 
   const int diag_mask = parse_diag_mask(cfg.get_string(section, "components", std::optional<std::string>("xxyyzz")));
-  const std::string out_file = cfg.get_string(section, "output", std::optional<std::string>("rg_ree.dat"));
-  const std::string outdir_s = cfg.get_string(section, "output_dir", std::optional<std::string>(""));
-  const fs::path output_dir = outdir_s.empty() ? env.output_dir_general : resolve_path(env.cfg_dir, outdir_s);
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out_path = (output_dir / out_file).lexically_normal();
+  const fs::path out_path = resolve_measure_output_path(cfg, section, env, "output", "rg_ree.dat");
 
   RGReeOptions opt;
   opt.frame_start = frame_start;

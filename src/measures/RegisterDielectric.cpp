@@ -25,6 +25,7 @@ using measure_ext::Axis1D;
 using measure_ext::SelectedChains;
 using measure_ext::axis1d_name;
 using measure_ext::axis_length;
+using measure_ext::append_integer_like_field_cap;
 using measure_ext::box_volume;
 using measure_ext::build_selected_chains;
 using measure_ext::dstr;
@@ -33,7 +34,7 @@ using measure_ext::get_static_combined_view;
 using measure_ext::orth_area_for_axis;
 using measure_ext::parse_axis1d;
 using measure_ext::primary_axis_coord;
-using measure_ext::resolve_path;
+using measure_ext::resolve_measure_output_path;
 
 constexpr double kBoltzmann = 1.380649e-23;
 constexpr double kEps0 = 8.8541878128e-12;
@@ -509,7 +510,7 @@ void append_dielectric_caps(const IniConfig& cfg,
   caps.scale = ScaleCompatibility{true, true, true};
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
   if (cfg.has_key(section, "entity_id_field")) {
-    caps.requires_dfields.push_back(cfg.get_string(section, "entity_id_field"));
+    append_integer_like_field_cap(caps, cfg.get_string(section, "entity_id_field"));
     return;
   }
   if (env.first_frame && env.first_frame->has_mol) {
@@ -543,11 +544,7 @@ std::unique_ptr<IMeasure> bulk_dielectric_create(const IniConfig& cfg,
   const auto entity_ids = entity_id_per_atom_from_config(cfg, section, frame0, sysctx);
   SelectedChains entities = build_selected_chains(sel, entity_ids);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("bulk_dielectric.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "bulk_dielectric.dat");
 
   DielectricCommonOptions opt;
   opt.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -587,11 +584,7 @@ std::unique_ptr<IMeasure> slab_dielectric_create(const IniConfig& cfg,
   const auto entity_ids = entity_id_per_atom_from_config(cfg, section, frame0, sysctx);
   SelectedChains entities = build_selected_chains(sel, entity_ids);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("slab_dielectric.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "slab_dielectric.dat");
 
   SlabDielectricMeasure::Options opt;
   opt.common.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));

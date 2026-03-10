@@ -35,6 +35,7 @@ using measure_ext::OrderedChains;
 using measure_ext::SelectedChains;
 using measure_ext::Vec3;
 using measure_ext::atom_vec3;
+using measure_ext::append_integer_like_field_cap;
 using measure_ext::build_ordered_chains_from_chain_pos;
 using measure_ext::build_selected_chains;
 using measure_ext::chain_id_per_atom_from_config;
@@ -45,7 +46,8 @@ using measure_ext::get_static_combined_view;
 using measure_ext::norm;
 using measure_ext::ordered_chains_from_config;
 using measure_ext::resolve_exact_frame_end;
-using measure_ext::resolve_path;
+using measure_ext::resolve_measure_output_dir;
+using measure_ext::resolve_measure_output_path;
 using measure_ext::safe_unit;
 using measure_ext::x_unit_for_axis;
 
@@ -526,11 +528,7 @@ std::unique_ptr<IMeasure> bond_vector_acf_create(const IniConfig& cfg,
     }
   };
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("bond_vector_acf.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "bond_vector_acf.dat");
 
   OrientationCorrMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -556,7 +554,7 @@ MeasureCapabilities segment_reorientation_caps(const IniConfig& cfg,
   caps.requires_dfields = {"xu", "yu", "zu"};
   caps.scale = ScaleCompatibility{true, true, true};
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
-  if (cfg.has_key(section, "chain_id_field")) caps.requires_dfields.push_back(cfg.get_string(section, "chain_id_field"));
+  if (cfg.has_key(section, "chain_id_field")) append_integer_like_field_cap(caps, cfg.get_string(section, "chain_id_field"));
   if (cfg.has_key(section, "chain_pos_field")) caps.requires_dfields.push_back(cfg.get_string(section, "chain_pos_field"));
   else caps.requires_topology_sections.push_back("bonds");
   return caps;
@@ -603,11 +601,7 @@ std::unique_ptr<IMeasure> segment_reorientation_create(const IniConfig& cfg,
     }
   };
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("segment_reorientation.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "segment_reorientation.dat");
 
   OrientationCorrMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -631,9 +625,9 @@ MeasureCapabilities ring_normal_acf_caps(const IniConfig& cfg,
   caps.selection_policy = SelectionPolicy::RequireStatic;
   caps.requires_identity_consistent = true;
   caps.requires_dfields = {"xu", "yu", "zu",
-                           cfg.get_string(section, "ring_id_field"),
                            cfg.get_string(section, "ring_pos_field")};
   caps.scale = ScaleCompatibility{true, true, true};
+  append_integer_like_field_cap(caps, cfg.get_string(section, "ring_id_field"));
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
   return caps;
 }
@@ -684,11 +678,7 @@ std::unique_ptr<IMeasure> ring_normal_acf_create(const IniConfig& cfg,
     }
   };
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("ring_normal_acf.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "ring_normal_acf.dat");
 
   OrientationCorrMeasure::Options opt;
   opt.range.frame_start = cfg.get_int64(section, "frame_start", std::optional<std::int64_t>(0));
@@ -715,7 +705,7 @@ MeasureCapabilities dipole_family_caps(const IniConfig& cfg,
   caps.scale = ScaleCompatibility{true, true, true};
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
   if (cfg.has_key(section, "entity_id_field")) {
-    caps.requires_dfields.push_back(cfg.get_string(section, "entity_id_field"));
+    append_integer_like_field_cap(caps, cfg.get_string(section, "entity_id_field"));
   } else if (env.first_frame && env.first_frame->has_mol) {
     caps.requires_i64fields.push_back("mol");
   } else {
@@ -740,10 +730,7 @@ std::unique_ptr<IMeasure> create_total_dipole_time(const IniConfig& cfg,
   const auto entity_id = entity_id_per_atom_from_config(cfg, section, frame0, sysctx);
   const SelectedChains entities = build_selected_chains(sel, entity_id);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
+  const fs::path output_dir = resolve_measure_output_dir(cfg, section, env);
   const std::string acf_name = cfg.get_string(section, "output_acf", std::optional<std::string>(type_name + std::string("_acf.dat")));
   const std::string spec_name = cfg.get_string(section, "output_spectrum", std::optional<std::string>(type_name + std::string("_spectrum.dat")));
   const fs::path out_acf = (output_dir / acf_name).lexically_normal();

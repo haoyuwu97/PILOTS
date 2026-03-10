@@ -33,12 +33,14 @@ namespace pilots {
 namespace {
 
 using measure_ext::count_diag_dims;
-using measure_ext::dfield_to_i64;
+using measure_ext::append_integer_like_field_cap;
+using measure_ext::integer_like_field_to_i64;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::parse_diag_mask;
 using measure_ext::resolve_exact_frame_end;
-using measure_ext::resolve_path;
+using measure_ext::resolve_measure_output_dir;
+using measure_ext::resolve_measure_output_path;
 using measure_ext::x_unit_for_axis;
 
 struct TransportRangeOptions {
@@ -82,32 +84,6 @@ inline void append_static_selection_caps(const IniConfig& cfg,
   caps.requires_identity_consistent = true;
   caps.scale = ScaleCompatibility{true, true, true};
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
-}
-
-inline void append_integer_like_field_cap(MeasureCapabilities& caps,
-                                          const std::string& field) {
-  if (field == "id" || field == "mol") {
-    caps.requires_i64fields.push_back(field);
-  } else if (field == "type") {
-    caps.requires_intfields.push_back(field);
-  } else {
-    caps.requires_dfields.push_back(field);
-  }
-}
-
-inline std::vector<std::int64_t> integer_like_field_to_i64(const Frame& frame,
-                                                           const std::string& field) {
-  if (field == "id" || field == "mol") {
-    const auto v = frame.require_i64field(field);
-    return std::vector<std::int64_t>(v.begin(), v.end());
-  }
-  if (field == "type") {
-    const auto v = frame.require_intfield(field);
-    std::vector<std::int64_t> out(v.size(), 0);
-    for (std::size_t i = 0; i < v.size(); ++i) out[i] = static_cast<std::int64_t>(v[i]);
-    return out;
-  }
-  return dfield_to_i64(frame.require_dfield(field), field, true);
 }
 
 inline std::vector<double> selected_field_copy(SelectionView sel,
@@ -920,11 +896,7 @@ std::unique_ptr<IMeasure> current_acf_create(const IniConfig& cfg,
   opt.corr = parse_correlator_spec(cfg, section, env.dt);
   opt.range.frame_end = resolve_exact_frame_end(opt.corr, env.follow, opt.range.frame_start, opt.range.frame_end, env.input_path);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("current_acf.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "current_acf.dat");
 
   return std::make_unique<CurrentACFMeasure>(instance, out.string(), sel, opt);
 }
@@ -967,11 +939,7 @@ std::unique_ptr<IMeasure> conductivity_einstein_create(const IniConfig& cfg,
   const auto q0 = frame0.require_dfield(opt.q_field);
   const std::vector<double> q_sel = selected_field_copy(sel, q0);
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
-  const fs::path out = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("conductivity_einstein.dat"))).lexically_normal();
+  const fs::path out = resolve_measure_output_path(cfg, section, env, "output", "conductivity_einstein.dat");
 
   return std::make_unique<ChargeEinsteinMeasure>(instance, out.string(), sel, opt, q_sel);
 }
@@ -1011,10 +979,7 @@ std::unique_ptr<IMeasure> site_hop_create(const IniConfig& cfg,
   opt.ignore_unassigned = cfg.get_bool(section, "ignore_unassigned", std::optional<bool>(true));
   opt.dt = env.dt;
 
-  const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
-      ? env.output_dir_general
-      : resolve_path(env.cfg_dir, cfg.get_string(section, "output_dir"));
-  if (!env.dry_run) fs::create_directories(output_dir);
+  const fs::path output_dir = resolve_measure_output_dir(cfg, section, env);
   const fs::path summary = (output_dir / cfg.get_string(section, "output", std::optional<std::string>("site_hop_summary.dat"))).lexically_normal();
   const fs::path transitions = (output_dir / cfg.get_string(section, "transitions_output", std::optional<std::string>("site_hop_transitions.dat"))).lexically_normal();
   const fs::path dwell = (output_dir / cfg.get_string(section, "dwell_output", std::optional<std::string>("site_hop_dwell.dat"))).lexically_normal();

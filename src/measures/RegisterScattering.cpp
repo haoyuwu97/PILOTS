@@ -958,7 +958,7 @@ std::pair<SelectionView, SelectionView> resolve_scattering_selections(const IniC
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group_ref, topo_group_ref, combine_expr, "scattering family");
   SelectionView drift_sel = remove_drift
       ? get_static_group_view(*env.selection_provider, frame0, drift_group_ref, "scattering family drift_group")
-      : env.selection_provider->get_combined_view(frame0, 0, "all", "all", "A");
+      : get_static_group_view(*env.selection_provider, frame0, "all", "scattering family drift_group");
   return {sel, drift_sel};
 }
 

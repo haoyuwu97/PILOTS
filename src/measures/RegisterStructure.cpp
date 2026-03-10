@@ -960,7 +960,7 @@ std::unique_ptr<IMeasure> dynsf_create(const IniConfig& cfg,
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, "dynamic_structure_factor");
   SelectionView drift_sel = remove_drift
       ? get_static_group_view(*env.selection_provider, frame0, drift_group, "dynamic_structure_factor")
-      : env.selection_provider->get_combined_view(frame0, 0, "all", "all", "A");
+      : get_static_group_view(*env.selection_provider, frame0, "all", "dynamic_structure_factor drift_group");
 
   const auto q_values = q_values_from_config(cfg, section);
   const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()
@@ -1011,7 +1011,7 @@ std::unique_ptr<IMeasure> vanhove_create(const IniConfig& cfg,
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, "van_hove");
   SelectionView drift_sel = remove_drift
       ? get_static_group_view(*env.selection_provider, frame0, drift_group, "van_hove")
-      : env.selection_provider->get_combined_view(frame0, 0, "all", "all", "A");
+      : get_static_group_view(*env.selection_provider, frame0, "all", "van_hove drift_group");
 
   const std::string type_s = cfg.get_string(section, "type");
   const fs::path output_dir = cfg.get_string(section, "output_dir", std::optional<std::string>("")).empty()

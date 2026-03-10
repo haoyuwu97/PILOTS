@@ -371,7 +371,7 @@ std::unique_ptr<IMeasure> alpha2_create(const IniConfig& cfg,
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group_ref, topo_group_ref, combine_expr, "alpha2");
   SelectionView drift_sel = remove_drift
       ? get_static_group_view(*env.selection_provider, frame0, drift_group_ref, "alpha2 drift_group")
-      : env.selection_provider->get_combined_view(frame0, 0, "all", "all", "A");
+      : get_static_group_view(*env.selection_provider, frame0, "all", "alpha2 drift_group");
 
   Alpha2Measure::Options opt;
   opt.frame_start = frame_start;

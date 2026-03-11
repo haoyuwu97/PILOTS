@@ -581,8 +581,15 @@ Even though this file was introduced for OMIEC-oriented workflows, the retained 
 **Modes**
   ``number``, ``charge``, ``mass``
 
+**Important config keys**
+  ``axis``, ``n_bins``, ``mode``, and, for slab workflows,
+  ``slab_align_recenter``, ``halfcell_fold``, ``target_center_frac``, and
+  optional ``anchor_group`` / ``anchor_topo_group`` / ``anchor_combine``.
+
 **Outputs**
-  1D bin center, average weight, density
+  1D bin center, average weight, density in the analysis coordinate. When slab
+  alignment or half-cell folding is enabled, the coordinate reported in the text
+  output is the transformed slab coordinate rather than the raw box axis.
 
 ``coordination``
 ^^^^^^^^^^^^^^^^
@@ -605,6 +612,81 @@ Even though this file was introduced for OMIEC-oriented workflows, the retained 
 
 **Outputs**
   frame, time, box lengths, box volume, and ratios relative to the first analyzed frame
+
+
+Insertion and slab-kernel calibration family
+--------------------------------------------
+
+``src/measures/RegisterInsertionProfiles.cpp``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These measures share the same slab-analysis transform used by ``profile1d``:
+
+* ``slab_align_recenter`` recenters a slab-like anchor selection to ``target_center_frac``
+  using a circular mean in fractional coordinate space.
+* ``halfcell_fold`` folds a periodic electrolyte / OMIEC / electrolyte cell into a single
+  reservoir-to-slab half-cell.
+
+``accessibility_profile`` / ``probe_accessibility_profile``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Meaning**
+  Probe-radius-dependent accessible-volume fraction profile :math:`h(z; r_p)` from hard-core
+  insertion geometry.
+
+.. math::
+
+   h(z; r_p)=\left\langle \frac{N_{\mathrm{accessible}}(z; r_p)}{N_{\mathrm{trial}}(z)}\right\rangle
+
+**Important config keys**
+  ``probe_radius``, ``radius_field`` or ``occluder_radius``, ``samples_plane``,
+  ``samples_axis``, ``convergence_refine_factor``, slab transform keys, and
+  reservoir-window keys ``reservoir_lo_frac`` / ``reservoir_hi_frac`` with optional
+  right-window counterparts.
+
+**Outputs**
+  Absolute accessibility, SEM across analyzed frames, reservoir-normalized
+  accessibility, :math:`-\ln[h(z)/h_{\mathrm{res}}]`, and coarse-versus-refined voxel
+  convergence diagnostics.
+
+``widom_profile``
+^^^^^^^^^^^^^^^^^
+
+**Meaning**
+  Total charge-off Widom insertion profile using the configured soft backend.
+
+.. math::
+
+   \mu^{\mathrm{ex}}_{0}(z)=-\beta^{-1}\ln\left\langle e^{-\beta \Delta U_0}\right\rangle_z
+
+**Important config keys**
+  All accessibility keys plus ``beta`` and ``energy_model``. The current public
+  backend supports ``none`` and full ``lj126`` pair energies, with optional
+  ``sigma_field`` / ``epsilon_field`` or constant probe/occluder LJ parameters.
+
+``conditional_widom_profile``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Meaning**
+  Mode-A-style decomposition into hard accessibility and conditional charge-off
+  insertion over the accessible region.
+
+.. math::
+
+   \mu_{\mathrm{hard}}(z)=-\beta^{-1}\ln h(z)
+
+.. math::
+
+   \mu_{\mathrm{cond}}(z)=-\beta^{-1}\ln\left\langle e^{-\beta \Delta U_0}\right\rangle_{z,\mathrm{accessible}}
+
+.. math::
+
+   \mu_{\mathrm{full}}(z)=\mu_{\mathrm{hard}}(z)+\mu_{\mathrm{cond}}(z)
+
+**Outputs**
+  Reservoir-referenced hard, conditional, and full charge-off insertion factors;
+  corresponding free-energy profiles; SEM estimates from the per-frame distribution;
+  and a conditional/full identity residual for audit.
 
 Anisotropy, geometry, dynamic heterogeneity, and local structure
 ----------------------------------------------------------------

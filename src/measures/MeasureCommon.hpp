@@ -709,4 +709,156 @@ inline std::int64_t resolve_finite_frame_end(bool follow,
   return eff;
 }
 
+
+
+inline double wrap_unit_interval(double x) {
+  x -= std::floor(x);
+  if (x < 0.0) x += 1.0;
+  return x;
+}
+
+inline double axis_fraction_from_lambda(const std::array<double, 3>& lam,
+                                        Axis1D a) {
+  switch (a) {
+    case Axis1D::X: return wrap_unit_interval(lam[0]);
+    case Axis1D::Y: return wrap_unit_interval(lam[1]);
+    case Axis1D::Z: return wrap_unit_interval(lam[2]);
+  }
+  return wrap_unit_interval(lam[0]);
+}
+
+inline double axis_fraction_from_xyz(const Box& box,
+                                     double x,
+                                     double y,
+                                     double z,
+                                     Axis1D a) {
+  return axis_fraction_from_lambda(box.to_lambda(x, y, z), a);
+}
+
+inline double circular_mean_axis_fraction(const Frame& frame,
+                                          const SelectionView& sel,
+                                          Axis1D axis) {
+  if (sel.idx.empty()) {
+    throw std::runtime_error("circular_mean_axis_fraction: anchor selection is empty");
+  }
+  const auto xu = frame.require_dfield("xu");
+  const auto yu = frame.require_dfield("yu");
+  const auto zu = frame.require_dfield("zu");
+  double csum = 0.0;
+  double ssum = 0.0;
+  for (const std::size_t i : sel.idx) {
+    const double f = axis_fraction_from_xyz(frame.box, xu[i], yu[i], zu[i], axis);
+    const double ang = 2.0 * std::numbers::pi * f;
+    csum += std::cos(ang);
+    ssum += std::sin(ang);
+  }
+  if (std::abs(csum) < 1e-18 && std::abs(ssum) < 1e-18) {
+    const std::size_t i0 = sel.idx.front();
+    return axis_fraction_from_xyz(frame.box, xu[i0], yu[i0], zu[i0], axis);
+  }
+  double ang = std::atan2(ssum, csum) / (2.0 * std::numbers::pi);
+  if (ang < 0.0) ang += 1.0;
+  return ang;
+}
+
+struct SlabTransformOptions {
+  Axis1D axis = Axis1D::Z;
+  bool slab_align_recenter = false;
+  bool halfcell_fold = false;
+  double target_center_frac = 0.5;
+};
+
+struct SlabFrameTransform {
+  Axis1D axis = Axis1D::Z;
+  double box_length = 0.0;
+  double shift_frac = 0.0;
+  double center_frac = 0.5;
+  bool slab_align_recenter = false;
+  bool halfcell_fold = false;
+
+  double domain_length() const {
+    return halfcell_fold ? (0.5 * box_length) : box_length;
+  }
+
+  double raw_to_aligned_fraction(double raw_frac) const {
+    return wrap_unit_interval(raw_frac + shift_frac);
+  }
+
+  double aligned_to_raw_fraction(double aligned_frac) const {
+    return wrap_unit_interval(aligned_frac - shift_frac);
+  }
+
+  double fold_aligned_coord(double aligned_coord) const {
+    const double center = center_frac * box_length;
+    double d = aligned_coord - center;
+    d -= std::nearbyint(d / box_length) * box_length;
+    return 0.5 * box_length - std::abs(d);
+  }
+
+  double point_to_domain_coord(const Box& box,
+                               double x,
+                               double y,
+                               double z) const {
+    const double raw_frac = axis_fraction_from_xyz(box, x, y, z, axis);
+    const double aligned_frac = raw_to_aligned_fraction(raw_frac);
+    const double aligned_coord = aligned_frac * box_length;
+    return halfcell_fold ? fold_aligned_coord(aligned_coord) : aligned_coord;
+  }
+
+  double point_to_domain_fraction(const Box& box,
+                                  double x,
+                                  double y,
+                                  double z) const {
+    const double D = domain_length();
+    if (D <= 0.0) return 0.0;
+    return point_to_domain_coord(box, x, y, z) / D;
+  }
+
+  double aligned_fraction_from_domain_fraction(double domain_frac,
+                                               int branch = 0) const {
+    const double u = std::clamp(domain_frac, 0.0, 1.0);
+    if (!halfcell_fold) return u;
+    const double dist_frac = 0.5 * (1.0 - u);
+    const double sign = (branch % 2 == 0) ? 1.0 : -1.0;
+    return wrap_unit_interval(center_frac + sign * dist_frac);
+  }
+
+  std::array<double, 3> lambda_for_domain_sample(double domain_frac,
+                                                 double transverse_u,
+                                                 double transverse_v,
+                                                 int branch = 0) const {
+    std::array<double, 3> lam{0.0, 0.0, 0.0};
+    const double axis_frac = aligned_to_raw_fraction(aligned_fraction_from_domain_fraction(domain_frac, branch));
+    switch (axis) {
+      case Axis1D::X:
+        lam = {axis_frac, wrap_unit_interval(transverse_u), wrap_unit_interval(transverse_v)};
+        break;
+      case Axis1D::Y:
+        lam = {wrap_unit_interval(transverse_u), axis_frac, wrap_unit_interval(transverse_v)};
+        break;
+      case Axis1D::Z:
+        lam = {wrap_unit_interval(transverse_u), wrap_unit_interval(transverse_v), axis_frac};
+        break;
+    }
+    return lam;
+  }
+};
+
+inline SlabFrameTransform make_slab_frame_transform(const Frame& frame,
+                                                    const SelectionView* anchor_sel,
+                                                    const SlabTransformOptions& opt) {
+  SlabFrameTransform tf;
+  tf.axis = opt.axis;
+  tf.box_length = axis_length(frame.box, opt.axis);
+  tf.center_frac = opt.target_center_frac;
+  tf.slab_align_recenter = opt.slab_align_recenter;
+  tf.halfcell_fold = opt.halfcell_fold;
+  if (opt.slab_align_recenter && anchor_sel != nullptr) {
+    const double anchor_center = circular_mean_axis_fraction(frame, *anchor_sel, opt.axis);
+    tf.shift_frac = wrap_unit_interval(opt.target_center_frac - anchor_center);
+  } else {
+    tf.shift_frac = 0.0;
+  }
+  return tf;
+}
 } // namespace pilots::measure_ext

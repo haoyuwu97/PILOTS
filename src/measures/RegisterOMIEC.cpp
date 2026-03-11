@@ -26,6 +26,8 @@ using measure_ext::Axis1D;
 using measure_ext::axis1d_name;
 using measure_ext::axis_length;
 using measure_ext::box_volume;
+using measure_ext::make_slab_frame_transform;
+using measure_ext::SlabTransformOptions;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::mass_by_atom_from_config;
@@ -133,11 +135,13 @@ public:
     std::size_t n_bins = 0;
     ProfileMode mode = ProfileMode::Number;
     std::string charge_field = "q";
+    SlabTransformOptions slab;
   };
 
   Profile1DMeasure(std::string instance_name,
                    std::string output_path,
                    SelectionView sel,
+                   std::optional<SelectionView> anchor_sel,
                    Options opt,
                    std::vector<double> mass_by_atom)
       : instance_name_(std::move(instance_name)),
@@ -146,6 +150,11 @@ public:
         mass_by_atom_(std::move(mass_by_atom)) {
     sel_name_owned_ = std::string(sel.name);
     sel_ = SelectionView{sel_name_owned_, sel.idx};
+    if (anchor_sel.has_value()) {
+      have_anchor_ = true;
+      anchor_name_owned_ = std::string(anchor_sel->name);
+      anchor_sel_ = SelectionView{anchor_name_owned_, anchor_sel->idx};
+    }
     if (opt_.range.frame_start < 0) throw std::runtime_error("profile1d: frame_start must be >= 0");
     if (opt_.range.frame_end >= 0 && opt_.range.frame_end < opt_.range.frame_start) {
       throw std::runtime_error("profile1d: frame_end must be -1 or >= frame_start");
@@ -180,6 +189,9 @@ public:
     md.params["charge_field"] = opt_.charge_field;
     md.params["frame_start"] = std::to_string(opt_.range.frame_start);
     md.params["frame_end"] = std::to_string(opt_.range.frame_end);
+    md.params["slab_align_recenter"] = opt_.slab.slab_align_recenter ? "true" : "false";
+    md.params["halfcell_fold"] = opt_.slab.halfcell_fold ? "true" : "false";
+    md.params["target_center_frac"] = dstr(opt_.slab.target_center_frac);
     return md;
   }
 
@@ -197,7 +209,9 @@ public:
     const auto q = (opt_.mode == ProfileMode::Charge)
         ? frame.require_dfield(opt_.charge_field)
         : std::span<const double>();
+    const auto tf = make_slab_frame_transform(frame, have_anchor_ ? &anchor_sel_ : nullptr, opt_.slab);
     const double vbin = box_volume(frame.box) / static_cast<double>(opt_.n_bins);
+    const double D = tf.domain_length();
 
     std::vector<double> local_weight(opt_.n_bins, 0.0);
     for (std::size_t p = 0; p < sel_.idx.size(); ++p) {
@@ -208,14 +222,13 @@ public:
       } else if (opt_.mode == ProfileMode::Mass) {
         w = mass_by_atom_.at(i);
       }
-      const double s = primary_axis_coord(frame.box, xu[i], yu[i], zu[i], opt_.axis) / axis_length(frame.box, opt_.axis);
+      const double s = (D > 0.0) ? tf.point_to_domain_coord(frame.box, xu[i], yu[i], zu[i]) / D : 0.0;
       std::size_t b = static_cast<std::size_t>(std::floor(s * static_cast<double>(opt_.n_bins)));
       if (b >= opt_.n_bins) b = opt_.n_bins - 1;
       local_weight[b] += w;
     }
 
-    const double coord_scale = axis_length(frame.box, opt_.axis);
-    mean_axis_length_ += coord_scale;
+    mean_axis_length_ += D;
     for (std::size_t b = 0; b < opt_.n_bins; ++b) {
       weight_sum_[b] += local_weight[b];
       density_sum_[b] += local_weight[b] / vbin;
@@ -228,7 +241,10 @@ public:
     util::atomic_write_text(output_path_, [&](std::ostream& ofs) {
       ofs << "# PILOTS: 1D profile for OMIEC/interfacial analysis\n";
       ofs << "# selection: " << sel_.name << " (n=" << sel_.idx.size() << ")\n";
-      ofs << "# axis: " << axis1d_name(opt_.axis) << ", n_bins: " << opt_.n_bins << "\n";
+      if (have_anchor_) ofs << "# anchor: " << anchor_sel_.name << "\n";
+      ofs << "# axis: " << axis1d_name(opt_.axis) << ", n_bins: " << opt_.n_bins
+          << ", slab_align_recenter: " << (opt_.slab.slab_align_recenter ? "true" : "false")
+          << ", halfcell_fold: " << (opt_.slab.halfcell_fold ? "true" : "false") << "\n";
       ofs << "# mode: " << profile_mode_name(opt_.mode) << "\n";
       if (opt_.mode == ProfileMode::Charge) ofs << "# charge_field: " << opt_.charge_field << "\n";
       ofs << "# frame_range: [" << opt_.range.frame_start << ", " << opt_.range.frame_end << "]\n";
@@ -261,7 +277,10 @@ private:
   std::string instance_name_;
   std::string output_path_;
   std::string sel_name_owned_;
+  std::string anchor_name_owned_;
   SelectionView sel_;
+  SelectionView anchor_sel_{};
+  bool have_anchor_ = false;
   Options opt_;
   std::vector<double> mass_by_atom_;
   std::vector<double> weight_sum_;
@@ -704,6 +723,7 @@ void append_static_selection_caps(const IniConfig& cfg,
   caps.scale = ScaleCompatibility{true, true, true};
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
   if (cfg.has_key(section, "group_b")) caps.group_refs.push_back(cfg.get_string(section, "group_b"));
+  if (cfg.has_key(section, "anchor_group")) caps.group_refs.push_back(cfg.get_string(section, "anchor_group"));
 }
 
 MeasureCapabilities profile_caps(const IniConfig& cfg,
@@ -743,6 +763,24 @@ std::unique_ptr<IMeasure> profile_create(const IniConfig& cfg,
   std::vector<double> mass_by_atom(frame0.natoms, 1.0);
   if (mode == ProfileMode::Mass) mass_by_atom = mass_by_atom_from_config(cfg, section, frame0, sysctx);
 
+  std::optional<SelectionView> anchor_sel;
+  const bool has_anchor_keys = cfg.has_key(section, "anchor_group")
+                            || cfg.has_key(section, "anchor_topo_group")
+                            || cfg.has_key(section, "anchor_combine");
+  const bool want_anchor = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false))
+                        || cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false))
+                        || has_anchor_keys;
+  if (want_anchor) {
+    if (!has_anchor_keys) {
+      anchor_sel = sel;
+    } else {
+      const std::string ag = cfg.get_string(section, "anchor_group", std::optional<std::string>("all"));
+      const std::string at = cfg.get_string(section, "anchor_topo_group", std::optional<std::string>("all"));
+      const std::string ac = cfg.get_string(section, "anchor_combine", std::optional<std::string>("A&T"));
+      anchor_sel = get_static_combined_view(*env.selection_provider, frame0, ag, at, ac, "profile1d anchor");
+    }
+  }
+
   const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "profile1d.dat");
 
   Profile1DMeasure::Options opt;
@@ -750,11 +788,15 @@ std::unique_ptr<IMeasure> profile_create(const IniConfig& cfg,
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
   opt.range.dry_run = env.dry_run;
   opt.axis = parse_axis1d(cfg.get_string(section, "axis", std::optional<std::string>("z")));
+  opt.slab.axis = opt.axis;
+  opt.slab.slab_align_recenter = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false));
+  opt.slab.halfcell_fold = cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false));
+  opt.slab.target_center_frac = cfg.get_double(section, "target_center_frac", std::optional<double>(0.5));
   opt.n_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_bins", std::optional<std::int64_t>(100)));
   opt.mode = mode;
   opt.charge_field = cfg.get_string(section, "charge_field", std::optional<std::string>("q"));
 
-  return std::make_unique<Profile1DMeasure>(instance, out.string(), sel, opt, std::move(mass_by_atom));
+  return std::make_unique<Profile1DMeasure>(instance, out.string(), sel, anchor_sel, opt, std::move(mass_by_atom));
 }
 
 MeasureCapabilities coordination_caps(const IniConfig& cfg,

@@ -394,6 +394,9 @@ Dielectric and orientation / relaxation family
 **Dependencies**
   entity grouping from ``entity_id_field`` or ``mol`` or topology bonds; temperature and unit metadata
 
+**Meaning**
+  Classic neutral-entity dipole-fluctuation dielectric. Use this when grouped entities are approximately neutral.
+
 **Outputs**
   per-component permittivity and isotropic average
 
@@ -403,10 +406,27 @@ Dielectric and orientation / relaxation family
    \qquad
    \mathbf M=\sum_e \boldsymbol\mu_e
 
+``bulk_fragment_dielectric``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Additional keys**
+  ``charge_model = fragment_internal`` (default for this alias), ``entity_reference = geometric|mass``
+
+**Meaning**
+  Conduction-blocked charged-mixture dielectric built from fragment-internal dipoles
+
+.. math::
+
+   \boldsymbol\mu_e^{\mathrm{int}} = \sum_{i\in e} q_i \left(\mathbf r_i-\mathbf R_e\right)
+
+This yields a finite, origin-invariant entity-internal polarization even when grouped fragments carry net charge.
+It is useful as a charged-mixture **surrogate/background-polarization dielectric**, but should not be confused
+with the full zero-frequency static dielectric of a conducting electrolyte.
+
 ``slab_dielectric`` / ``layered_dielectric``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Additional key**
+**Additional keys**
   ``axis`` and ``n_bins``
 
 **Outputs**
@@ -421,6 +441,56 @@ Dielectric and orientation / relaxation family
    \varepsilon_{\parallel}(z)=1+\chi_{\parallel}(z),
    \qquad
    \varepsilon_{\perp}(z)=\frac{1}{1-\chi_{\perp}(z)}
+
+``slab_fragment_dielectric`` / ``layered_fragment_dielectric``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Additional keys**
+  ``charge_model = fragment_internal`` (default for this alias), ``entity_reference = geometric|mass`` and the slab-workflow keys
+  ``slab_align_recenter``, ``halfcell_fold``, ``target_center_frac``, ``anchor_group`` / ``anchor_topo_group`` / ``anchor_combine``.
+
+**Meaning**
+  Charged-mixture, fragment-internal layered dielectric. This is the finite, conduction-blocked local dielectric surrogate for systems where grouped entities may carry net charge.
+
+``slab_bg_dielectric`` / ``layered_bg_dielectric``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Additional keys**
+  ``species_groups`` (comma-separated static groups to resolve),
+  ``background_groups`` (comma-separated subset whose sum defines the background polarization; defaults to ``species_groups``),
+  plus the same ``entity_reference`` and slab-workflow keys used by ``slab_fragment_dielectric``.
+
+**Meaning**
+  Species-resolved **background-polarization** layered dielectric inspired by local polarization-density fluctuation methods.
+  The measure constructs species-resolved fragment-internal polarization fields, sums the requested
+  ``background_groups`` into a total background polarization, and outputs both the total background dielectric
+  and per-species susceptibility contributions.
+
+**Outputs**
+  For each slab bin, one ``TOTAL_BG`` row plus one row per species group. The total row contains
+  :math:`\varepsilon_\parallel^{\mathrm{bg}}(z)` and :math:`\varepsilon_\perp^{\mathrm{bg}}(z)`. Species rows contain
+  their partial covariances and susceptibility contributions with respect to ``TOTAL_BG``.
+
+.. math::
+
+   \boldsymbol\mu_{e,g}^{\mathrm{int}} = \sum_{i\in e\cap g} q_i \left(\mathbf r_i-\mathbf R_e\right)
+
+   \mathbf M_g = \sum_e \boldsymbol\mu_{e,g}^{\mathrm{int}},
+   \qquad
+   \mathbf M_{\mathrm{bg}} = \sum_{g\in \mathrm{background}} \mathbf M_g
+
+   \chi_{g,\parallel}^{\mathrm{bg}}(z)=
+   \frac{\mathrm{Cov}\!\left(M_{g,\parallel}^{\mathrm{bin}}(z),\,M_{\mathrm{bg},\parallel}\right)}
+        {\varepsilon_0 V_{\mathrm{bin}} k_B T}
+
+   \chi_{g,\perp}^{\mathrm{bg}}(z)=
+   \frac{\mathrm{Cov}\!\left(M_{g,\perp}^{\mathrm{bin}}(z),\,M_{\mathrm{bg},\perp}\right)}
+        {\varepsilon_0 V_{\mathrm{bin}} k_B T}
+
+   \chi_{\mathrm{bg}}(z)=\sum_{g\in \mathrm{background}} \chi_g^{\mathrm{bg}}(z)
+
+The ``TOTAL_BG`` row then reports :math:`\varepsilon_\parallel^{\mathrm{bg}}(z)=1+\chi_{\parallel}^{\mathrm{bg}}(z)`
+and :math:`\varepsilon_\perp^{\mathrm{bg}}(z)=1/[1-\chi_{\perp}^{\mathrm{bg}}(z)]`.
 
 ``src/measures/RegisterOrientation.cpp``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

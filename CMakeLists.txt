@@ -40,6 +40,7 @@ file(GLOB PILOTS_MEASURE_SOURCES
   CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/src/measures/*.cpp"
 )
+list(FILTER PILOTS_MEASURE_SOURCES EXCLUDE REGEX ".*template_measure\.cpp$")
 
 add_executable(pilots
   src/main.cpp
@@ -65,4 +66,17 @@ add_test(
 add_test(
   NAME slab_bg_dielectric_smoke
   COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_bg_dielectric.ini
+)
+
+add_test(
+  NAME slab_bg_dielectric_partial_cover_optin_smoke
+  COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_bg_dielectric_partial_cover_allowed.ini
+)
+
+add_test(
+  NAME slab_bg_dielectric_partial_cover_rejected
+  COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_bg_dielectric_partial_cover.ini
+)
+set_tests_properties(slab_bg_dielectric_partial_cover_rejected PROPERTIES
+  WILL_FAIL TRUE
 )

@@ -55,3 +55,15 @@ add_test(
   NAME msd_config_smoke
   COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/msd.ini
 )
+add_test(
+  NAME insertion_profiles_smoke
+  COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/insertion_smoke.ini
+)
+add_test(
+  NAME slab_transform_smoke
+  COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_transform_smoke.ini
+)
+add_test(
+  NAME slab_dielectric_smoke
+  COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_dielectric_smoke.ini
+)

@@ -56,7 +56,13 @@ add_test(
   COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/msd.ini
 )
 
+
 add_test(
   NAME slab_fragment_dielectric_smoke
   COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_fragment_dielectric.ini
+)
+
+add_test(
+  NAME slab_bg_dielectric_smoke
+  COMMAND pilots --config ${CMAKE_CURRENT_SOURCE_DIR}/tests/configs/slab_bg_dielectric.ini
 )

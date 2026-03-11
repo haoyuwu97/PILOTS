@@ -25,16 +25,22 @@ using measure_ext::Axis1D;
 using measure_ext::SelectedChains;
 using measure_ext::axis1d_name;
 using measure_ext::axis_length;
+using measure_ext::build_optional_anchor_selection;
 using measure_ext::append_integer_like_field_cap;
 using measure_ext::box_volume;
 using measure_ext::build_selected_chains;
 using measure_ext::dstr;
 using measure_ext::entity_id_per_atom_from_config;
+using measure_ext::make_slab_frame_transform;
+using measure_ext::SlabFrameTransform;
 using measure_ext::get_static_combined_view;
+using measure_ext::SlabTransformOptions;
 using measure_ext::orth_area_for_axis;
 using measure_ext::parse_axis1d;
 using measure_ext::primary_axis_coord;
 using measure_ext::resolve_measure_output_path;
+using measure_ext::transformed_axis_length;
+using measure_ext::transformed_fraction_for_axis;
 
 constexpr double kBoltzmann = 1.380649e-23;
 constexpr double kEps0 = 8.8541878128e-12;
@@ -111,7 +117,8 @@ inline EntityDipoleFrame compute_entity_dipoles(const Frame& frame,
                                                 const DielectricCommonOptions& opt,
                                                 bool with_bins,
                                                 Axis1D axis,
-                                                std::size_t n_bins) {
+                                                std::size_t n_bins,
+                                                const SlabFrameTransform* tf = nullptr) {
   const auto q = frame.require_dfield(opt.charge_field);
   const auto xu = frame.require_dfield("xu");
   const auto yu = frame.require_dfield("yu");
@@ -119,7 +126,7 @@ inline EntityDipoleFrame compute_entity_dipoles(const Frame& frame,
 
   EntityDipoleFrame out;
   out.volume = box_volume(frame.box);
-  out.axis_length = measure_ext::axis_length(frame.box, axis);
+  out.axis_length = transformed_axis_length(tf, frame.box, axis);
   if (with_bins) {
     out.bin_mx.assign(n_bins, 0.0);
     out.bin_my.assign(n_bins, 0.0);
@@ -156,7 +163,7 @@ inline EntityDipoleFrame compute_entity_dipoles(const Frame& frame,
     out.mz += muz;
 
     if (with_bins) {
-      const double s = primary_axis_coord(frame.box, cx, cy, cz, axis) / out.axis_length;
+      const double s = transformed_fraction_for_axis(tf, frame.box, cx, cy, cz, axis);
       std::size_t b = static_cast<std::size_t>(std::floor(s * static_cast<double>(n_bins)));
       if (b >= n_bins) b = n_bins - 1;
       out.bin_mx[b] += mux;
@@ -323,11 +330,13 @@ public:
     DielectricCommonOptions common;
     Axis1D axis = Axis1D::Z;
     std::size_t n_bins = 0;
+    SlabTransformOptions slab;
   };
 
   SlabDielectricMeasure(std::string instance_name,
                         std::string output_path,
                         SelectionView sel,
+                        std::optional<SelectionView> anchor_sel,
                         SelectedChains entities,
                         Options opt)
       : instance_name_(std::move(instance_name)),
@@ -336,6 +345,11 @@ public:
         opt_(std::move(opt)) {
     sel_name_owned_ = std::string(sel.name);
     sel_ = SelectionView{sel_name_owned_, sel.idx};
+    if (anchor_sel.has_value()) {
+      have_anchor_ = true;
+      anchor_name_owned_ = std::string(anchor_sel->name);
+      anchor_sel_ = SelectionView{anchor_name_owned_, anchor_sel->idx};
+    }
     validate_common_();
     if (entities_.n_chains() == 0) throw std::runtime_error("slab_dielectric: no grouped entities are available");
   }
@@ -367,6 +381,9 @@ public:
     md.params["frame_start"] = std::to_string(opt_.common.frame_start);
     md.params["frame_end"] = std::to_string(opt_.common.frame_end);
     md.params["n_entities"] = std::to_string(entities_.n_chains());
+    md.params["slab_align_recenter"] = opt_.slab.slab_align_recenter ? "true" : "false";
+    md.params["halfcell_fold"] = opt_.slab.halfcell_fold ? "true" : "false";
+    md.params["target_center_frac"] = dstr(opt_.slab.target_center_frac);
     return md;
   }
 
@@ -378,7 +395,8 @@ public:
 
   void on_frame(const Frame& frame, std::size_t frame_index) override {
     if (!frame_in_range(frame_index, opt_.common.frame_start, opt_.common.frame_end)) return;
-    frames_.push_back(compute_entity_dipoles(frame, sel_, entities_, opt_.common, true, opt_.axis, opt_.n_bins));
+    const auto tf = make_slab_frame_transform(frame, have_anchor_ ? &anchor_sel_ : nullptr, opt_.slab);
+    frames_.push_back(compute_entity_dipoles(frame, sel_, entities_, opt_.common, true, opt_.axis, opt_.n_bins, &tf));
   }
 
   void flush_partial() override {
@@ -471,10 +489,13 @@ private:
   std::string instance_name_;
   std::string output_path_;
   std::string sel_name_owned_;
+  std::string anchor_name_owned_;
   SelectionView sel_;
+  SelectionView anchor_sel_{};
   SelectedChains entities_;
   Options opt_;
   std::vector<EntityDipoleFrame> frames_;
+  bool have_anchor_ = false;
   bool started_ = false;
 
   void validate_common_() const {
@@ -509,6 +530,7 @@ void append_dielectric_caps(const IniConfig& cfg,
   caps.requires_dfields = {"xu", "yu", "zu", cfg.get_string(section, "charge_field", std::optional<std::string>("q"))};
   caps.scale = ScaleCompatibility{true, true, true};
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
+  if (cfg.has_key(section, "anchor_group")) caps.group_refs.push_back(cfg.get_string(section, "anchor_group"));
   if (cfg.has_key(section, "entity_id_field")) {
     append_integer_like_field_cap(caps, cfg.get_string(section, "entity_id_field"));
     return;
@@ -597,9 +619,15 @@ std::unique_ptr<IMeasure> slab_dielectric_create(const IniConfig& cfg,
   opt.common.allow_charged_entities = cfg.get_bool(section, "allow_charged_entities", std::optional<bool>(false));
   opt.common.dry_run = env.dry_run;
   opt.axis = parse_axis1d(cfg.get_string(section, "axis", std::optional<std::string>("z")));
+  opt.slab.axis = opt.axis;
+  opt.slab.slab_align_recenter = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false));
+  opt.slab.halfcell_fold = cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false));
+  opt.slab.target_center_frac = cfg.get_double(section, "target_center_frac", std::optional<double>(0.5));
   opt.n_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_bins", std::optional<std::int64_t>(100)));
 
-  return std::make_unique<SlabDielectricMeasure>(instance, out.string(), sel, std::move(entities), opt);
+  auto anchor_sel = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel,
+                                                    measure_ext::slab_transform_requested(cfg, section), "slab_dielectric");
+  return std::make_unique<SlabDielectricMeasure>(instance, out.string(), sel, anchor_sel, std::move(entities), opt);
 }
 
 static MeasureRegistrar g_register_bulk_dielectric("bulk_dielectric", &bulk_dielectric_caps, &bulk_dielectric_create);

@@ -25,6 +25,7 @@ namespace {
 using measure_ext::Axis1D;
 using measure_ext::axis1d_name;
 using measure_ext::axis_length;
+using measure_ext::build_optional_anchor_selection;
 using measure_ext::box_volume;
 using measure_ext::make_slab_frame_transform;
 using measure_ext::SlabTransformOptions;
@@ -763,23 +764,8 @@ std::unique_ptr<IMeasure> profile_create(const IniConfig& cfg,
   std::vector<double> mass_by_atom(frame0.natoms, 1.0);
   if (mode == ProfileMode::Mass) mass_by_atom = mass_by_atom_from_config(cfg, section, frame0, sysctx);
 
-  std::optional<SelectionView> anchor_sel;
-  const bool has_anchor_keys = cfg.has_key(section, "anchor_group")
-                            || cfg.has_key(section, "anchor_topo_group")
-                            || cfg.has_key(section, "anchor_combine");
-  const bool want_anchor = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false))
-                        || cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false))
-                        || has_anchor_keys;
-  if (want_anchor) {
-    if (!has_anchor_keys) {
-      anchor_sel = sel;
-    } else {
-      const std::string ag = cfg.get_string(section, "anchor_group", std::optional<std::string>("all"));
-      const std::string at = cfg.get_string(section, "anchor_topo_group", std::optional<std::string>("all"));
-      const std::string ac = cfg.get_string(section, "anchor_combine", std::optional<std::string>("A&T"));
-      anchor_sel = get_static_combined_view(*env.selection_provider, frame0, ag, at, ac, "profile1d anchor");
-    }
-  }
+  auto anchor_sel = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel,
+                                                  measure_ext::slab_transform_requested(cfg, section), "profile1d");
 
   const fs::path out = measure_ext::resolve_measure_output_path(cfg, section, env, "output", "profile1d.dat");
 

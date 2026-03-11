@@ -33,19 +33,24 @@ namespace {
 using measure_ext::Axis1D;
 using measure_ext::axis1d_name;
 using measure_ext::axis_length;
+using measure_ext::build_optional_anchor_selection;
 using measure_ext::box_volume;
 using measure_ext::count_diag_dims;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
 using measure_ext::get_static_group_view;
+using measure_ext::make_slab_frame_transform;
 using measure_ext::mass_by_atom_from_config;
 using measure_ext::orth_area_for_axis;
 using measure_ext::parse_axis1d;
+using measure_ext::SlabTransformOptions;
 using measure_ext::parse_double_list;
 using measure_ext::primary_axis_coord;
 using measure_ext::resolve_exact_frame_end;
 using measure_ext::resolve_path;
 using measure_ext::same_index_set;
+using measure_ext::transformed_axis_length;
+using measure_ext::transformed_fraction_for_axis;
 using measure_ext::shell_volume_3d;
 using measure_ext::x_unit_for_axis;
 
@@ -425,12 +430,14 @@ public:
     std::size_t n_slab_bins = 0;
     std::size_t n_r_bins = 0;
     double r_max = 0.0;
+    SlabTransformOptions slab;
   };
 
   SlabRDFMeasure(std::string instance_name,
                  std::string output_path,
                  SelectionView sel_a,
                  SelectionView sel_b,
+                 std::optional<SelectionView> anchor_sel,
                  Options opt)
       : instance_name_(std::move(instance_name)),
         output_path_(std::move(output_path)),
@@ -439,6 +446,11 @@ public:
     sel_b_name_owned_ = std::string(sel_b.name);
     sel_a_ = SelectionView{sel_a_name_owned_, sel_a.idx};
     sel_b_ = SelectionView{sel_b_name_owned_, sel_b.idx};
+    if (anchor_sel.has_value()) {
+      have_anchor_ = true;
+      anchor_name_owned_ = std::string(anchor_sel->name);
+      anchor_sel_ = SelectionView{anchor_name_owned_, anchor_sel->idx};
+    }
     same_sel_ = same_index_set(sel_a_, sel_b_);
     hist_.assign(opt_.n_slab_bins * opt_.n_r_bins, 0.0);
     ref_count_.assign(opt_.n_slab_bins, 0.0);
@@ -459,6 +471,10 @@ public:
     od.x_unit = "distance";
     od.columns = {"slab_bin", "slab_center_frac", "r_center", "g", "count_pairs", "n_ref", "n_frames"};
     md.outputs.push_back(std::move(od));
+    md.params["axis"] = axis1d_name(opt_.axis);
+    md.params["slab_align_recenter"] = opt_.slab.slab_align_recenter ? "true" : "false";
+    md.params["halfcell_fold"] = opt_.slab.halfcell_fold ? "true" : "false";
+    md.params["target_center_frac"] = dstr(opt_.slab.target_center_frac);
     return md;
   }
   void on_start(const Frame& first_frame) override { (void)first_frame; started_ = true; if (!opt_.range.dry_run) flush_partial(); }
@@ -467,10 +483,11 @@ public:
     const auto xu = frame.require_dfield("xu");
     const auto yu = frame.require_dfield("yu");
     const auto zu = frame.require_dfield("zu");
+    const auto tf = make_slab_frame_transform(frame, have_anchor_ ? &anchor_sel_ : nullptr, opt_.slab);
     const double rho_b = static_cast<double>(sel_b_.idx.size()) / box_volume(frame.box);
     rho_b_sum_ += rho_b;
     for (const std::size_t ia : sel_a_.idx) {
-      const double frac = primary_axis_coord(frame.box, xu[ia], yu[ia], zu[ia], opt_.axis) / axis_length(frame.box, opt_.axis);
+      const double frac = transformed_fraction_for_axis(&tf, frame.box, xu[ia], yu[ia], zu[ia], opt_.axis);
       std::size_t sb = static_cast<std::size_t>(std::floor(frac * static_cast<double>(opt_.n_slab_bins)));
       if (sb >= opt_.n_slab_bins) sb = opt_.n_slab_bins - 1;
       ref_count_[sb] += 1.0;
@@ -514,10 +531,11 @@ public:
   }
   void finalize() override { if (!opt_.range.dry_run) flush_partial(); }
 private:
-  std::string instance_name_, output_path_, sel_a_name_owned_, sel_b_name_owned_;
-  SelectionView sel_a_, sel_b_;
+  std::string instance_name_, output_path_, sel_a_name_owned_, sel_b_name_owned_, anchor_name_owned_;
+  SelectionView sel_a_, sel_b_, anchor_sel_{};
   Options opt_;
   bool same_sel_ = false;
+  bool have_anchor_ = false;
   bool started_ = false;
   std::vector<double> hist_, ref_count_;
   double rho_b_sum_ = 0.0;
@@ -613,10 +631,11 @@ public:
   }
   void finalize() override { if (!opt_.range.dry_run) flush_partial(); }
 private:
-  std::string instance_name_, output_path_, sel_name_owned_;
-  SelectionView sel_;
+  std::string instance_name_, output_path_, sel_name_owned_, anchor_name_owned_;
+  SelectionView sel_, anchor_sel_{};
   Options opt_;
   std::vector<double> mass_by_atom_;
+  bool have_anchor_ = false;
   bool started_ = false;
   std::vector<double> weight_sum_, density_sum_;
   std::size_t n_frames_ = 0;
@@ -632,11 +651,13 @@ public:
     std::size_t n_v_bins = 0;
     WeightMode mode = WeightMode::Number;
     std::string charge_field = "q";
+    SlabTransformOptions slab;
   };
 
   Map2DMeasure(std::string instance_name,
                std::string output_path,
                SelectionView sel,
+               std::optional<SelectionView> anchor_sel,
                Options opt,
                std::vector<double> mass_by_atom)
       : instance_name_(std::move(instance_name)),
@@ -645,6 +666,11 @@ public:
         mass_by_atom_(std::move(mass_by_atom)) {
     sel_name_owned_ = std::string(sel.name);
     sel_ = SelectionView{sel_name_owned_, sel.idx};
+    if (anchor_sel.has_value()) {
+      have_anchor_ = true;
+      anchor_name_owned_ = std::string(anchor_sel->name);
+      anchor_sel_ = SelectionView{anchor_name_owned_, anchor_sel->idx};
+    }
     weight_sum_.assign(opt_.n_u_bins * opt_.n_v_bins, 0.0);
     density_sum_.assign(opt_.n_u_bins * opt_.n_v_bins, 0.0);
   }
@@ -663,6 +689,10 @@ public:
     od.x_unit = "fractional_coordinate";
     od.columns = {"u_bin", "v_bin", "u_center_frac", "v_center_frac", "mean_weight", "mean_density", "n_frames"};
     md.outputs.push_back(std::move(od));
+    md.params["slab_axis"] = axis1d_name(opt_.slab.axis);
+    md.params["slab_align_recenter"] = opt_.slab.slab_align_recenter ? "true" : "false";
+    md.params["halfcell_fold"] = opt_.slab.halfcell_fold ? "true" : "false";
+    md.params["target_center_frac"] = dstr(opt_.slab.target_center_frac);
     return md;
   }
   void on_start(const Frame& first_frame) override { (void)first_frame; started_ = true; if (!opt_.range.dry_run) flush_partial(); }
@@ -672,19 +702,14 @@ public:
     const auto yu = frame.require_dfield("yu");
     const auto zu = frame.require_dfield("zu");
     const auto q = (opt_.mode == WeightMode::Charge) ? frame.require_dfield(opt_.charge_field) : std::span<const double>();
+    const auto tf = make_slab_frame_transform(frame, have_anchor_ ? &anchor_sel_ : nullptr, opt_.slab);
     const double vbin = box_volume(frame.box) / static_cast<double>(opt_.n_u_bins * opt_.n_v_bins);
     for (const std::size_t i : sel_.idx) {
       double w = 1.0;
       if (opt_.mode == WeightMode::Charge) w = q[i];
       else if (opt_.mode == WeightMode::Mass) w = mass_by_atom_.at(i);
-      const auto lam = frame.box.to_lambda(xu[i], yu[i], zu[i]);
       const auto frac = [&](Axis1D axis) {
-        switch (axis) {
-          case Axis1D::X: return lam[0] - std::floor(lam[0]);
-          case Axis1D::Y: return lam[1] - std::floor(lam[1]);
-          case Axis1D::Z: return lam[2] - std::floor(lam[2]);
-        }
-        return lam[2];
+        return transformed_fraction_for_axis(&tf, frame.box, xu[i], yu[i], zu[i], axis);
       };
       const std::size_t ub = std::min<std::size_t>(static_cast<std::size_t>(std::floor(frac(opt_.axis_u) * static_cast<double>(opt_.n_u_bins))), opt_.n_u_bins - 1);
       const std::size_t vb = std::min<std::size_t>(static_cast<std::size_t>(std::floor(frac(opt_.axis_v) * static_cast<double>(opt_.n_v_bins))), opt_.n_v_bins - 1);
@@ -714,10 +739,11 @@ public:
   }
   void finalize() override { if (!opt_.range.dry_run) flush_partial(); }
 private:
-  std::string instance_name_, output_path_, sel_name_owned_;
-  SelectionView sel_;
+  std::string instance_name_, output_path_, sel_name_owned_, anchor_name_owned_;
+  SelectionView sel_, anchor_sel_{};
   Options opt_;
   std::vector<double> mass_by_atom_;
+  bool have_anchor_ = false;
   bool started_ = false;
   std::vector<double> weight_sum_, density_sum_;
   std::size_t n_frames_ = 0;
@@ -734,11 +760,13 @@ public:
     double left_lo_frac = 0.0, left_hi_frac = 0.2;
     double right_lo_frac = 0.8, right_hi_frac = 1.0;
     double divide_frac = 0.5;
+    SlabTransformOptions slab;
   };
 
   InterfaceExcessMeasure(std::string instance_name,
                          std::string output_path,
                          SelectionView sel,
+                         std::optional<SelectionView> anchor_sel,
                          Options opt,
                          std::vector<double> mass_by_atom)
       : instance_name_(std::move(instance_name)),
@@ -747,6 +775,11 @@ public:
         mass_by_atom_(std::move(mass_by_atom)) {
     sel_name_owned_ = std::string(sel.name);
     sel_ = SelectionView{sel_name_owned_, sel.idx};
+    if (anchor_sel.has_value()) {
+      have_anchor_ = true;
+      anchor_name_owned_ = std::string(anchor_sel->name);
+      anchor_sel_ = SelectionView{anchor_name_owned_, anchor_sel->idx};
+    }
     density_sum_.assign(opt_.n_bins, 0.0);
     axis_length_sum_ = 0.0;
   }
@@ -765,6 +798,10 @@ public:
     od.x_unit = "none";
     od.columns = {"left_bulk_density", "right_bulk_density", "divide_coord", "gamma_left", "gamma_right", "gamma_total", "n_frames"};
     md.outputs.push_back(std::move(od));
+    md.params["axis"] = axis1d_name(opt_.axis);
+    md.params["slab_align_recenter"] = opt_.slab.slab_align_recenter ? "true" : "false";
+    md.params["halfcell_fold"] = opt_.slab.halfcell_fold ? "true" : "false";
+    md.params["target_center_frac"] = dstr(opt_.slab.target_center_frac);
     return md;
   }
   void on_start(const Frame& first_frame) override { (void)first_frame; started_ = true; if (!opt_.range.dry_run) flush_partial(); }
@@ -774,14 +811,15 @@ public:
     const auto yu = frame.require_dfield("yu");
     const auto zu = frame.require_dfield("zu");
     const auto q = (opt_.mode == WeightMode::Charge) ? frame.require_dfield(opt_.charge_field) : std::span<const double>();
+    const auto tf = make_slab_frame_transform(frame, have_anchor_ ? &anchor_sel_ : nullptr, opt_.slab);
     const double vbin = box_volume(frame.box) / static_cast<double>(opt_.n_bins);
-    const double L = axis_length(frame.box, opt_.axis);
+    const double L = transformed_axis_length(&tf, frame.box, opt_.axis);
     axis_length_sum_ += L;
     for (const std::size_t i : sel_.idx) {
       double w = 1.0;
       if (opt_.mode == WeightMode::Charge) w = q[i];
       else if (opt_.mode == WeightMode::Mass) w = mass_by_atom_.at(i);
-      const double frac = primary_axis_coord(frame.box, xu[i], yu[i], zu[i], opt_.axis) / L;
+      const double frac = transformed_fraction_for_axis(&tf, frame.box, xu[i], yu[i], zu[i], opt_.axis);
       std::size_t b = std::min<std::size_t>(static_cast<std::size_t>(std::floor(frac * static_cast<double>(opt_.n_bins))), opt_.n_bins - 1);
       density_sum_[b] += w / vbin;
     }
@@ -825,10 +863,11 @@ public:
   }
   void finalize() override { if (!opt_.range.dry_run) flush_partial(); }
 private:
-  std::string instance_name_, output_path_, sel_name_owned_;
-  SelectionView sel_;
+  std::string instance_name_, output_path_, sel_name_owned_, anchor_name_owned_;
+  SelectionView sel_, anchor_sel_{};
   Options opt_;
   std::vector<double> mass_by_atom_;
+  bool have_anchor_ = false;
   bool started_ = false;
   std::vector<double> density_sum_;
   double axis_length_sum_ = 0.0;
@@ -845,6 +884,7 @@ void append_static_caps(const IniConfig& cfg,
   caps.group_refs.push_back(cfg.get_string(section, "group", std::optional<std::string>("all")));
   if (cfg.has_key(section, "group_b")) caps.group_refs.push_back(cfg.get_string(section, "group_b"));
   if (cfg.has_key(section, "drift_group")) caps.group_refs.push_back(cfg.get_string(section, "drift_group"));
+  if (cfg.has_key(section, "anchor_group")) caps.group_refs.push_back(cfg.get_string(section, "anchor_group"));
 }
 
 MeasureCapabilities directional_msd_caps(const IniConfig& cfg,
@@ -946,10 +986,16 @@ std::unique_ptr<IMeasure> slab_rdf_create(const IniConfig& cfg,
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
   opt.range.dry_run = env.dry_run;
   opt.axis = parse_axis1d(cfg.get_string(section, "axis", std::optional<std::string>("z")));
+  opt.slab.axis = opt.axis;
+  opt.slab.slab_align_recenter = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false));
+  opt.slab.halfcell_fold = cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false));
+  opt.slab.target_center_frac = cfg.get_double(section, "target_center_frac", std::optional<double>(0.5));
   opt.n_slab_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_slab_bins", std::optional<std::int64_t>(20)));
   opt.n_r_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_r_bins", std::optional<std::int64_t>(200)));
   opt.r_max = cfg.get_double(section, "r_max");
-  return std::make_unique<SlabRDFMeasure>(instance, out.string(), sel_a, sel_b, opt);
+  auto anchor_sel = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel_a,
+                                                    measure_ext::slab_transform_requested(cfg, section), "slab_rdf");
+  return std::make_unique<SlabRDFMeasure>(instance, out.string(), sel_a, sel_b, anchor_sel, opt);
 }
 
 MeasureCapabilities cylindrical_profile_caps(const IniConfig& cfg,
@@ -1012,11 +1058,19 @@ std::unique_ptr<IMeasure> map2d_create(const IniConfig& cfg,
   opt.range.dry_run = env.dry_run;
   opt.axis_u = parse_axis1d(cfg.get_string(section, "axis_u", std::optional<std::string>("x")));
   opt.axis_v = parse_axis1d(cfg.get_string(section, "axis_v", std::optional<std::string>("y")));
+  opt.slab.axis = cfg.has_key(section, "slab_axis")
+      ? parse_axis1d(cfg.get_string(section, "slab_axis"))
+      : opt.axis_u;
+  opt.slab.slab_align_recenter = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false));
+  opt.slab.halfcell_fold = cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false));
+  opt.slab.target_center_frac = cfg.get_double(section, "target_center_frac", std::optional<double>(0.5));
   opt.n_u_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_u_bins", std::optional<std::int64_t>(100)));
   opt.n_v_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_v_bins", std::optional<std::int64_t>(100)));
   opt.mode = mode;
   opt.charge_field = cfg.get_string(section, "charge_field", std::optional<std::string>("q"));
-  return std::make_unique<Map2DMeasure>(instance, out.string(), sel, opt, std::move(mass_by_atom));
+  auto anchor_sel = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel,
+                                                    measure_ext::slab_transform_requested(cfg, section), "2d_map");
+  return std::make_unique<Map2DMeasure>(instance, out.string(), sel, anchor_sel, opt, std::move(mass_by_atom));
 }
 
 MeasureCapabilities interface_excess_caps(const IniConfig& cfg,
@@ -1046,6 +1100,10 @@ std::unique_ptr<IMeasure> interface_excess_create(const IniConfig& cfg,
   opt.range.frame_end = cfg.get_int64(section, "frame_end", std::optional<std::int64_t>(-1));
   opt.range.dry_run = env.dry_run;
   opt.axis = parse_axis1d(cfg.get_string(section, "axis", std::optional<std::string>("z")));
+  opt.slab.axis = opt.axis;
+  opt.slab.slab_align_recenter = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false));
+  opt.slab.halfcell_fold = cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false));
+  opt.slab.target_center_frac = cfg.get_double(section, "target_center_frac", std::optional<double>(0.5));
   opt.n_bins = static_cast<std::size_t>(cfg.get_int64(section, "n_bins", std::optional<std::int64_t>(200)));
   opt.mode = mode;
   opt.charge_field = cfg.get_string(section, "charge_field", std::optional<std::string>("q"));
@@ -1054,7 +1112,9 @@ std::unique_ptr<IMeasure> interface_excess_create(const IniConfig& cfg,
   opt.right_lo_frac = cfg.get_double(section, "right_lo_frac", std::optional<double>(0.8));
   opt.right_hi_frac = cfg.get_double(section, "right_hi_frac", std::optional<double>(1.0));
   opt.divide_frac = cfg.get_double(section, "divide_frac", std::optional<double>(0.5));
-  return std::make_unique<InterfaceExcessMeasure>(instance, out.string(), sel, opt, std::move(mass_by_atom));
+  auto anchor_sel = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel,
+                                                    measure_ext::slab_transform_requested(cfg, section), "interface_excess");
+  return std::make_unique<InterfaceExcessMeasure>(instance, out.string(), sel, anchor_sel, opt, std::move(mass_by_atom));
 }
 
 static MeasureRegistrar g_reg_directional_msd("directional_msd", &directional_msd_caps, &directional_msd_create);

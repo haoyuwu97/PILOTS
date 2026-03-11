@@ -861,4 +861,51 @@ inline SlabFrameTransform make_slab_frame_transform(const Frame& frame,
   }
   return tf;
 }
+
+inline bool slab_transform_requested(const IniConfig& cfg,
+                                     const std::string& section) {
+  return cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false))
+      || cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false))
+      || cfg.has_key(section, "anchor_group")
+      || cfg.has_key(section, "anchor_topo_group")
+      || cfg.has_key(section, "anchor_combine");
+}
+
+template <class ProviderLike>
+inline std::optional<SelectionView> build_optional_anchor_selection(const IniConfig& cfg,
+                                                                    const std::string& section,
+                                                                    ProviderLike& sp,
+                                                                    const Frame& frame0,
+                                                                    const SelectionView& fallback_sel,
+                                                                    bool needed,
+                                                                    const std::string& measure_name) {
+  const bool has_anchor_keys = cfg.has_key(section, "anchor_group")
+                            || cfg.has_key(section, "anchor_topo_group")
+                            || cfg.has_key(section, "anchor_combine");
+  if (!needed && !has_anchor_keys) return std::nullopt;
+  if (!has_anchor_keys) return fallback_sel;
+  const std::string group = cfg.get_string(section, "anchor_group", std::optional<std::string>("all"));
+  const std::string topo = cfg.get_string(section, "anchor_topo_group", std::optional<std::string>("all"));
+  const std::string comb = cfg.get_string(section, "anchor_combine", std::optional<std::string>("A&T"));
+  return get_static_combined_view(sp, frame0, group, topo, comb, measure_name + " anchor");
+}
+
+inline double transformed_fraction_for_axis(const SlabFrameTransform* tf,
+                                            const Box& box,
+                                            double x,
+                                            double y,
+                                            double z,
+                                            Axis1D axis) {
+  if (tf != nullptr && axis == tf->axis) {
+    return tf->point_to_domain_fraction(box, x, y, z);
+  }
+  return axis_fraction_from_xyz(box, x, y, z, axis);
+}
+
+inline double transformed_axis_length(const SlabFrameTransform* tf,
+                                      const Box& box,
+                                      Axis1D axis) {
+  if (tf != nullptr && axis == tf->axis) return tf->domain_length();
+  return axis_length(box, axis);
+}
 } // namespace pilots::measure_ext

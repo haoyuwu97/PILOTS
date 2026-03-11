@@ -29,6 +29,7 @@ using measure_ext::SlabFrameTransform;
 using measure_ext::SlabTransformOptions;
 using measure_ext::Vec3;
 using measure_ext::atom_vec3;
+using measure_ext::build_optional_anchor_selection;
 using measure_ext::axis1d_name;
 using measure_ext::dstr;
 using measure_ext::get_static_combined_view;
@@ -339,8 +340,18 @@ struct ReservoirFrameValues {
 };
 
 ReservoirFrameValues frame_reservoir_values(const FrameInsertionStats& s,
-                                            const std::vector<std::size_t>& res_bins) {
+                                            const std::vector<std::size_t>& res_bins,
+                                            const ReservoirReferenceOptions& opt) {
   ReservoirFrameValues out;
+  if (!opt.enabled) {
+    out.valid_h = true;
+    out.valid_total = true;
+    out.valid_cond = true;
+    out.h = 1.0;
+    out.total = 1.0;
+    out.cond = 1.0;
+    return out;
+  }
   out.h = average_over_bins(s.h, res_bins, nullptr);
   out.valid_h = std::isfinite(out.h) && out.h > 0.0;
   out.total = average_over_bins(s.total_mean, res_bins, nullptr);
@@ -407,7 +418,7 @@ public:
     conv_rel_frame_.resize(opt_.n_bins);
     pooled_total_trials_.assign(opt_.n_bins, 0);
     pooled_access_trials_.assign(opt_.n_bins, 0);
-    reservoir_bins_ = reservoir_bins(opt_.n_bins, opt_.reservoir);
+    reservoir_bins_ = opt_.reservoir.enabled ? reservoir_bins(opt_.n_bins, opt_.reservoir) : std::vector<std::size_t>{};
   }
 
   std::string type() const override { return type_name_; }
@@ -444,6 +455,7 @@ public:
     md.params["reservoir_use_right"] = opt_.reservoir.use_right_window ? "true" : "false";
     md.params["reservoir_right_lo_frac"] = dstr(opt_.reservoir.right_lo_frac);
     md.params["reservoir_right_hi_frac"] = dstr(opt_.reservoir.right_hi_frac);
+    md.params["reservoir_normalize"] = opt_.reservoir.enabled ? "true" : "false";
     return md;
   }
 
@@ -478,7 +490,7 @@ public:
       }
     }
 
-    const ReservoirFrameValues refvals = frame_reservoir_values(coarse, reservoir_bins_);
+    const ReservoirFrameValues refvals = frame_reservoir_values(coarse, reservoir_bins_, opt_.reservoir);
     for (std::size_t b = 0; b < opt_.n_bins; ++b) {
       if (refvals.valid_h && coarse.h[b] > 0.0) {
         const double h_rel = coarse.h[b] / refvals.h;
@@ -502,12 +514,16 @@ public:
           << ", convergence_refine_factor: " << opt_.convergence_refine_factor
           << ", slab_align_recenter: " << (opt_.slab.slab_align_recenter ? "true" : "false")
           << ", halfcell_fold: " << (opt_.slab.halfcell_fold ? "true" : "false") << "\n";
-      ofs << "# reservoir windows: left=[" << std::setprecision(17) << opt_.reservoir.left_lo_frac << ", "
-          << opt_.reservoir.left_hi_frac << "]";
-      if (opt_.reservoir.use_right_window) {
-        ofs << ", right=[" << opt_.reservoir.right_lo_frac << ", " << opt_.reservoir.right_hi_frac << "]";
+      if (opt_.reservoir.enabled) {
+        ofs << "# reservoir windows: left=[" << std::setprecision(17) << opt_.reservoir.left_lo_frac << ", "
+            << opt_.reservoir.left_hi_frac << "]";
+        if (opt_.reservoir.use_right_window) {
+          ofs << ", right=[" << opt_.reservoir.right_lo_frac << ", " << opt_.reservoir.right_hi_frac << "]";
+        }
+        ofs << "\n";
+      } else {
+        ofs << "# reservoir normalization: disabled (reported *_rel and mu_* use the absolute z-resolved means; *_res = 1)\n";
       }
-      ofs << "\n";
       ofs << "# columns: bin coord_lo_frac coord_hi_frac coord_center_frac coord_center_mean h_mean h_sem h_res h_rel h_rel_sem minus_log_h_rel minus_log_h_rel_sem conv_absdiff conv_absdiff_sem conv_reldiff conv_reldiff_sem n_trials_total n_access_total n_samples_per_frame n_frames\n";
       const double mean_D = (n_frames_ > 0) ? (mean_domain_length_ / static_cast<double>(n_frames_)) : 0.0;
       std::vector<double> h_pooled(opt_.n_bins, 0.0);
@@ -516,7 +532,7 @@ public:
             ? (static_cast<double>(pooled_access_trials_[b]) / static_cast<double>(pooled_total_trials_[b]))
             : 0.0;
       }
-      const double h_res = average_over_bins(h_pooled, reservoir_bins_, nullptr);
+      const double h_res = opt_.reservoir.enabled ? average_over_bins(h_pooled, reservoir_bins_, nullptr) : 1.0;
       for (std::size_t b = 0; b < opt_.n_bins; ++b) {
         const double lo_frac = static_cast<double>(b) / static_cast<double>(opt_.n_bins);
         const double hi_frac = static_cast<double>(b + 1) / static_cast<double>(opt_.n_bins);
@@ -602,7 +618,7 @@ public:
     }
     if (occluders_.idx.empty()) throw std::runtime_error(type_name_ + ": occluder selection is empty");
     if (opt_.n_bins == 0) throw std::runtime_error(type_name_ + ": n_bins must be >= 1");
-    reservoir_bins_ = reservoir_bins(opt_.n_bins, opt_.reservoir);
+    reservoir_bins_ = opt_.reservoir.enabled ? reservoir_bins(opt_.n_bins, opt_.reservoir) : std::vector<std::size_t>{};
 
     h_frame_.resize(opt_.n_bins);
     total_frame_.resize(opt_.n_bins);
@@ -669,6 +685,7 @@ public:
     md.params["reservoir_use_right"] = opt_.reservoir.use_right_window ? "true" : "false";
     md.params["reservoir_right_lo_frac"] = dstr(opt_.reservoir.right_lo_frac);
     md.params["reservoir_right_hi_frac"] = dstr(opt_.reservoir.right_hi_frac);
+    md.params["reservoir_normalize"] = opt_.reservoir.enabled ? "true" : "false";
     return md;
   }
 
@@ -706,7 +723,7 @@ public:
       }
     }
 
-    const ReservoirFrameValues refvals = frame_reservoir_values(coarse, reservoir_bins_);
+    const ReservoirFrameValues refvals = frame_reservoir_values(coarse, reservoir_bins_, opt_.reservoir);
     for (std::size_t b = 0; b < opt_.n_bins; ++b) {
       if (refvals.valid_h && coarse.h[b] > 0.0) {
         const double h_rel = coarse.h[b] / refvals.h;
@@ -723,12 +740,8 @@ public:
         cond_rel_frame_.add(b, cond_rel);
         mu_cond_frame_.add(b, -std::log(cond_rel) / opt_.beta);
       }
-      if (refvals.valid_h && refvals.valid_total && refvals.valid_cond
-          && coarse.h[b] > 0.0 && coarse.total_mean[b] > 0.0 && coarse.n_access[b] > 0 && coarse.cond_mean[b] > 0.0) {
-        const double mu_h = -std::log(coarse.h[b] / refvals.h) / opt_.beta;
-        const double mu_t = -std::log(coarse.total_mean[b] / refvals.total) / opt_.beta;
-        const double mu_c = -std::log(coarse.cond_mean[b] / refvals.cond) / opt_.beta;
-        audit_frame_.add(b, mu_t - mu_h - mu_c);
+      if (coarse.h[b] > 0.0 && coarse.total_mean[b] > 0.0 && coarse.n_access[b] > 0 && coarse.cond_mean[b] > 0.0) {
+        audit_frame_.add(b, -std::log(coarse.total_mean[b] / (coarse.h[b] * coarse.cond_mean[b])) / opt_.beta);
       }
     }
     ++n_frames_;
@@ -743,12 +756,16 @@ public:
           << ", beta: " << std::setprecision(17) << opt_.beta << "\n";
       ofs << "# occluders: " << occluders_.name << " (n=" << occluders_.idx.size() << ")\n";
       if (have_anchor_) ofs << "# anchor: " << anchor_sel_.name << "\n";
-      ofs << "# reservoir windows: left=[" << std::setprecision(17) << opt_.reservoir.left_lo_frac << ", "
-          << opt_.reservoir.left_hi_frac << "]";
-      if (opt_.reservoir.use_right_window) {
-        ofs << ", right=[" << opt_.reservoir.right_lo_frac << ", " << opt_.reservoir.right_hi_frac << "]";
+      if (opt_.reservoir.enabled) {
+        ofs << "# reservoir windows: left=[" << std::setprecision(17) << opt_.reservoir.left_lo_frac << ", "
+            << opt_.reservoir.left_hi_frac << "]";
+        if (opt_.reservoir.use_right_window) {
+          ofs << ", right=[" << opt_.reservoir.right_lo_frac << ", " << opt_.reservoir.right_hi_frac << "]";
+        }
+        ofs << "\n";
+      } else {
+        ofs << "# reservoir normalization: disabled (reported *_rel and mu_* use the absolute z-resolved means; *_res = 1)\n";
       }
-      ofs << "\n";
       if (mode_ == Mode::Conditional) {
         ofs << "# columns: bin coord_lo_frac coord_hi_frac coord_center_frac coord_center_mean h_mean h_sem h_res h_rel h_rel_sem mu_hard_rel mu_hard_rel_sem cond_boltz_mean cond_boltz_sem cond_boltz_res cond_rel cond_rel_sem mu_cond_rel mu_cond_rel_sem full_boltz_mean full_boltz_sem full_boltz_res full_rel full_rel_sem mu_full_rel mu_full_rel_sem identity_residual identity_residual_sem conv_absdiff conv_absdiff_sem conv_reldiff conv_reldiff_sem n_trials_total n_access_total n_samples_per_frame n_frames\n";
       } else {
@@ -770,11 +787,11 @@ public:
             ? (pooled_weight_sum_[b] / static_cast<double>(pooled_access_trials_[b]))
             : 0.0;
       }
-      const double h_res = average_over_bins(h_pooled, reservoir_bins_, nullptr);
-      const double total_res = average_over_bins(total_pooled, reservoir_bins_, nullptr);
       std::vector<unsigned char> cond_valid(opt_.n_bins, 0);
       for (std::size_t b = 0; b < opt_.n_bins; ++b) cond_valid[b] = (pooled_access_trials_[b] > 0) ? 1u : 0u;
-      const double cond_res = average_over_bins(cond_pooled, reservoir_bins_, &cond_valid);
+      const double h_res = opt_.reservoir.enabled ? average_over_bins(h_pooled, reservoir_bins_, nullptr) : 1.0;
+      const double total_res = opt_.reservoir.enabled ? average_over_bins(total_pooled, reservoir_bins_, nullptr) : 1.0;
+      const double cond_res = opt_.reservoir.enabled ? average_over_bins(cond_pooled, reservoir_bins_, &cond_valid) : 1.0;
 
       for (std::size_t b = 0; b < opt_.n_bins; ++b) {
         const double lo_frac = static_cast<double>(b) / static_cast<double>(opt_.n_bins);
@@ -790,8 +807,8 @@ public:
           const double mu_hard = (std::isfinite(h_rel) && h_rel > 0.0) ? (-std::log(h_rel) / opt_.beta) : std::numeric_limits<double>::infinity();
           const double mu_total = (std::isfinite(total_rel) && total_rel > 0.0) ? (-std::log(total_rel) / opt_.beta) : std::numeric_limits<double>::infinity();
           const double mu_cond = (std::isfinite(cond_rel) && cond_rel > 0.0) ? (-std::log(cond_rel) / opt_.beta) : std::numeric_limits<double>::infinity();
-          const double identity = (std::isfinite(mu_total) && std::isfinite(mu_hard) && std::isfinite(mu_cond))
-              ? (mu_total - mu_hard - mu_cond)
+          const double identity = (h_mean > 0.0 && total_mean > 0.0 && cond_mean > 0.0)
+              ? (-std::log(total_mean / (h_mean * cond_mean)) / opt_.beta)
               : std::numeric_limits<double>::quiet_NaN();
           ofs << b << ' '
               << std::setprecision(17) << lo_frac << ' '
@@ -919,15 +936,7 @@ std::optional<SelectionView> build_anchor_selection(const IniConfig& cfg,
                                                     const Frame& frame0,
                                                     const SelectionView& fallback_sel,
                                                     bool needed) {
-  const bool has_anchor_keys = cfg.has_key(section, "anchor_group")
-                            || cfg.has_key(section, "anchor_topo_group")
-                            || cfg.has_key(section, "anchor_combine");
-  if (!needed && !has_anchor_keys) return std::nullopt;
-  if (!has_anchor_keys) return fallback_sel;
-  const std::string group = cfg.get_string(section, "anchor_group", std::optional<std::string>("all"));
-  const std::string topo = cfg.get_string(section, "anchor_topo_group", std::optional<std::string>("all"));
-  const std::string comb = cfg.get_string(section, "anchor_combine", std::optional<std::string>("A&T"));
-  return get_static_combined_view(sp, frame0, group, topo, comb, "slab anchor");
+  return build_optional_anchor_selection(cfg, section, sp, frame0, fallback_sel, needed, "slab");
 }
 
 inline ReservoirReferenceOptions reservoir_options_from_config(const IniConfig& cfg,
@@ -952,11 +961,6 @@ inline ReservoirReferenceOptions reservoir_options_from_config(const IniConfig& 
   opt.right_lo_frac = cfg.get_double(section, "reservoir_right_lo_frac", std::optional<double>(0.9));
   opt.right_hi_frac = cfg.get_double(section, "reservoir_right_hi_frac", std::optional<double>(1.0));
   if (opt.use_right_window) validate_window(opt.right_lo_frac, opt.right_hi_frac, section + ": reservoir right window");
-  if (!opt.enabled) {
-    opt.left_lo_frac = 0.0;
-    opt.left_hi_frac = 1.0;
-    opt.use_right_window = false;
-  }
   return opt;
 }
 

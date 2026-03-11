@@ -732,6 +732,7 @@ MeasureCapabilities profile_caps(const IniConfig& cfg,
                                  const std::string& instance,
                                  const MeasureBuildEnv& env) {
   (void)instance;
+  (void)env;
   MeasureCapabilities caps;
   append_static_selection_caps(cfg, section, caps);
   const ProfileMode mode = parse_profile_mode(cfg.get_string(section, "mode", std::optional<std::string>("number")));

@@ -4,11 +4,11 @@
 #include <cstdint>
 #include <filesystem>
 #include <iomanip>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -29,6 +29,7 @@ using measure_ext::SlabFrameTransform;
 using measure_ext::SlabTransformOptions;
 using measure_ext::append_integer_like_field_cap;
 using measure_ext::axis1d_name;
+using measure_ext::build_optional_anchor_selection;
 using measure_ext::build_selected_chains;
 using measure_ext::box_volume;
 using measure_ext::dstr;
@@ -39,10 +40,12 @@ using measure_ext::make_slab_frame_transform;
 using measure_ext::mass_by_atom_from_config;
 using measure_ext::parse_axis1d;
 using measure_ext::resolve_measure_output_path;
+using measure_ext::slab_transform_requested;
 
 constexpr double kBoltzmann = 1.380649e-23;
 constexpr double kEps0 = 8.8541878128e-12;
 constexpr double kElementaryCharge = 1.602176634e-19;
+constexpr double kContributionFractionTolerance = 1e-12;
 
 enum class ChargeModel {
   NeutralOnly,
@@ -695,15 +698,6 @@ DielectricCommonOptions common_options_from_config(const IniConfig& cfg,
                                                     const SystemContext& sysctx,
                                                     ChargeModel default_model,
                                                     bool dry_run);
-std::optional<SelectionView> anchor_view_from_config(const IniConfig& cfg,
-                                                     const std::string& section,
-                                                     const Frame& frame0,
-                                                     SelectionProvider& sp,
-                                                     const std::string& fallback_group,
-                                                     const std::string& fallback_topo,
-                                                     const std::string& fallback_combine,
-                                                     const std::string& who);
-
 struct SpeciesDecomposition {
   std::vector<std::string> labels;
   std::vector<std::size_t> selected_counts;
@@ -711,6 +705,7 @@ struct SpeciesDecomposition {
   std::vector<std::uint8_t> in_background;
   std::size_t assigned_atoms = 0;
   std::size_t unassigned_atoms = 0;
+  bool allow_partial_cover = false;
 };
 
 struct BackgroundDielectricFrame {
@@ -720,22 +715,21 @@ struct BackgroundDielectricFrame {
   std::vector<std::vector<double>> bin_mx, bin_my, bin_mz;
 };
 
-inline std::vector<std::string> parse_name_list(const std::string& raw,
-                                                const std::string& key_name) {
-  std::vector<std::string> out;
-  std::stringstream ss(raw);
-  std::string item;
-  while (std::getline(ss, item, ',')) {
-    std::size_t a = 0;
-    while (a < item.size() && std::isspace(static_cast<unsigned char>(item[a]))) ++a;
-    std::size_t b = item.size();
-    while (b > a && std::isspace(static_cast<unsigned char>(item[b - 1]))) --b;
-    if (b > a) out.push_back(item.substr(a, b - a));
-  }
+inline std::vector<std::string> get_required_name_list(const IniConfig& cfg,
+                                                        const std::string& section,
+                                                        const std::string& key_name) {
+  const auto out = cfg.get_list(section, key_name);
   if (out.empty()) {
     throw std::runtime_error("dielectric measure requires a non-empty '" + key_name + "' list");
   }
   return out;
+}
+
+inline double contribution_fraction_or_nan(double chi_contrib,
+                                           double chi_total) {
+  return (std::abs(chi_total) > kContributionFractionTolerance)
+           ? (chi_contrib / chi_total)
+           : std::numeric_limits<double>::quiet_NaN();
 }
 
 inline SpeciesDecomposition build_species_decomposition(const IniConfig& cfg,
@@ -747,9 +741,9 @@ inline SpeciesDecomposition build_species_decomposition(const IniConfig& cfg,
   if (!cfg.has_key(section, "species_groups")) {
     throw std::runtime_error(who + ": species_groups is required");
   }
-  const auto labels = parse_name_list(cfg.get_string(section, "species_groups"), "species_groups");
+  const auto labels = get_required_name_list(cfg, section, "species_groups");
   const auto bg_labels = cfg.has_key(section, "background_groups")
-                           ? parse_name_list(cfg.get_string(section, "background_groups"), "background_groups")
+                           ? get_required_name_list(cfg, section, "background_groups")
                            : labels;
 
   SpeciesDecomposition out;
@@ -757,6 +751,7 @@ inline SpeciesDecomposition build_species_decomposition(const IniConfig& cfg,
   out.selected_counts.assign(labels.size(), 0);
   out.atom_species.assign(frame0.natoms, -1);
   out.in_background.assign(labels.size(), 0);
+  out.allow_partial_cover = cfg.get_bool(section, "allow_partial_species_cover", std::optional<bool>(false));
 
   std::vector<std::uint8_t> in_base(frame0.natoms, 0);
   for (const std::size_t atom : base_sel.idx) {
@@ -789,6 +784,12 @@ inline SpeciesDecomposition build_species_decomposition(const IniConfig& cfg,
 
   for (const std::size_t atom : base_sel.idx) {
     if (out.atom_species[atom] < 0) ++out.unassigned_atoms;
+  }
+  if (out.unassigned_atoms > 0 && !out.allow_partial_cover) {
+    throw std::runtime_error(
+        who + ": species_groups do not cover the full base selection; "
+        + std::to_string(out.unassigned_atoms)
+        + " selected atoms are unassigned. Add the missing atoms to species_groups or set allow_partial_species_cover=true to keep a partial decomposition.");
   }
 
   for (const auto& name : bg_labels) {
@@ -971,6 +972,10 @@ public:
     md.params["n_entities"] = std::to_string(entities_.n_chains());
     md.params["charge_model"] = charge_model_name(opt_.common.charge_model);
     md.params["entity_reference"] = entity_reference_name(opt_.common.entity_reference);
+    md.params["assigned_atoms"] = std::to_string(species_.assigned_atoms);
+    md.params["unassigned_atoms"] = std::to_string(species_.unassigned_atoms);
+    md.params["allow_partial_species_cover"] = species_.allow_partial_cover ? "true" : "false";
+    md.params["fraction_tolerance"] = dstr(kContributionFractionTolerance);
     md.params["slab_align_recenter"] = opt_.slab.slab_align_recenter ? "true" : "false";
     md.params["halfcell_fold"] = opt_.slab.halfcell_fold ? "true" : "false";
     md.params["target_center_frac"] = dstr(opt_.slab.target_center_frac);
@@ -1120,8 +1125,8 @@ public:
                                 - mean_species_bin_perp * mean_total_bg_perp;
           const double chi_parallel = cov_parallel / (kEps0 * mean_vbin * kBoltzmann * opt_.common.temperature);
           const double chi_perp = cov_perp / (kEps0 * mean_vbin * kBoltzmann * opt_.common.temperature);
-          const double frac_parallel = (std::abs(chi_bg_parallel) > 0.0) ? (chi_parallel / chi_bg_parallel) : 0.0;
-          const double frac_perp = (std::abs(chi_bg_perp) > 0.0) ? (chi_perp / chi_bg_perp) : 0.0;
+          const double frac_parallel = contribution_fraction_or_nan(chi_parallel, chi_bg_parallel);
+          const double frac_perp = contribution_fraction_or_nan(chi_perp, chi_bg_perp);
           write_row(species_.labels[s], species_.in_background[s] ? 1 : 0,
                     cov_parallel, cov_perp, chi_parallel, chi_perp, frac_parallel, frac_perp);
         }
@@ -1189,6 +1194,13 @@ private:
     ofs << "\n";
     ofs << "# assigned_atoms: " << species_.assigned_atoms
         << ", unassigned_atoms: " << species_.unassigned_atoms << "\n";
+    ofs << "# allow_partial_species_cover: "
+        << (species_.allow_partial_cover ? "true" : "false") << "\n";
+    if (species_.unassigned_atoms > 0) {
+      ofs << "# warning: species decomposition is partial; atoms outside species_groups still contribute to entity reference points and entity net-charge checks.\n";
+    }
+    ofs << "# fraction_tolerance: frac_parallel/frac_perp are NaN when |TOTAL_BG susceptibility| <= "
+        << std::setprecision(17) << kContributionFractionTolerance << "\n";
     ofs << "# meaning: species-resolved background dielectric profile. TOTAL_BG is the background-polarization dielectric built from the selected background_groups. Species rows report additive susceptibility contributions (or cross-correlated non-background contributions) with respect to TOTAL_BG.\n";
     ofs << "# columns: kind  is_background  bin  coord_lo_frac  coord_hi_frac  coord_center_frac  coord_center_mean  cov_parallel  cov_perp  chi_parallel_contrib  chi_perp_contrib  frac_parallel  frac_perp  eps_parallel_bg  eps_perp_bg  n_frames\n";
   }
@@ -1200,10 +1212,10 @@ void append_slab_background_dielectric_caps(const IniConfig& cfg,
                                             MeasureCapabilities& caps) {
   append_dielectric_caps(cfg, section, env, caps);
   if (!cfg.has_key(section, "species_groups")) return;
-  const auto groups = parse_name_list(cfg.get_string(section, "species_groups"), "species_groups");
+  const auto groups = get_required_name_list(cfg, section, "species_groups");
   for (const auto& g : groups) caps.group_refs.push_back(g);
   if (cfg.has_key(section, "background_groups")) {
-    const auto bg = parse_name_list(cfg.get_string(section, "background_groups"), "background_groups");
+    const auto bg = get_required_name_list(cfg, section, "background_groups");
     for (const auto& g : bg) caps.group_refs.push_back(g);
   }
 }
@@ -1232,7 +1244,11 @@ std::unique_ptr<IMeasure> slab_background_dielectric_create_impl(const std::stri
   const std::string topo = cfg.get_string(section, "topo_group", std::optional<std::string>("all"));
   const std::string comb = cfg.get_string(section, "combine", std::optional<std::string>("A&T"));
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, type_name);
-  auto anchor = anchor_view_from_config(cfg, section, frame0, *env.selection_provider, group, topo, comb, type_name);
+  auto anchor = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel,
+                                                slab_transform_requested(cfg, section), type_name,
+                                                std::optional<std::string>(group),
+                                                std::optional<std::string>(topo),
+                                                std::optional<std::string>(comb));
   const auto entity_ids = entity_id_per_atom_from_config(cfg, section, frame0, sysctx);
   SelectedChains entities = build_selected_chains(sel, entity_ids);
   SpeciesDecomposition species = build_species_decomposition(cfg, section, frame0, *env.selection_provider, sel, type_name);
@@ -1272,11 +1288,7 @@ void append_dielectric_caps(const IniConfig& cfg,
   (void)topo;
   caps.group_refs.push_back(group);
 
-  const bool want_anchor = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false))
-                        || cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false))
-                        || cfg.has_key(section, "anchor_group")
-                        || cfg.has_key(section, "anchor_topo_group")
-                        || cfg.has_key(section, "anchor_combine");
+  const bool want_anchor = slab_transform_requested(cfg, section);
   if (want_anchor) {
     caps.group_refs.push_back(cfg.get_string(section, "anchor_group", std::optional<std::string>(group)));
   }
@@ -1324,26 +1336,6 @@ DielectricCommonOptions common_options_from_config(const IniConfig& cfg,
     }
   }
   return opt;
-}
-
-std::optional<SelectionView> anchor_view_from_config(const IniConfig& cfg,
-                                                     const std::string& section,
-                                                     const Frame& frame0,
-                                                     SelectionProvider& sp,
-                                                     const std::string& fallback_group,
-                                                     const std::string& fallback_topo,
-                                                     const std::string& fallback_combine,
-                                                     const std::string& who) {
-  const bool want_anchor = cfg.get_bool(section, "slab_align_recenter", std::optional<bool>(false))
-                        || cfg.get_bool(section, "halfcell_fold", std::optional<bool>(false))
-                        || cfg.has_key(section, "anchor_group")
-                        || cfg.has_key(section, "anchor_topo_group")
-                        || cfg.has_key(section, "anchor_combine");
-  if (!want_anchor) return std::nullopt;
-  const std::string ag = cfg.get_string(section, "anchor_group", std::optional<std::string>(fallback_group));
-  const std::string at = cfg.get_string(section, "anchor_topo_group", std::optional<std::string>(fallback_topo));
-  const std::string ac = cfg.get_string(section, "anchor_combine", std::optional<std::string>(fallback_combine));
-  return get_static_combined_view(sp, frame0, ag, at, ac, who);
 }
 
 MeasureCapabilities bulk_dielectric_caps(const IniConfig& cfg,
@@ -1404,7 +1396,11 @@ std::unique_ptr<IMeasure> slab_dielectric_create_impl(const std::string& type_na
   const std::string topo = cfg.get_string(section, "topo_group", std::optional<std::string>("all"));
   const std::string comb = cfg.get_string(section, "combine", std::optional<std::string>("A&T"));
   SelectionView sel = get_static_combined_view(*env.selection_provider, frame0, group, topo, comb, type_name);
-  auto anchor = anchor_view_from_config(cfg, section, frame0, *env.selection_provider, group, topo, comb, type_name);
+  auto anchor = build_optional_anchor_selection(cfg, section, *env.selection_provider, frame0, sel,
+                                                slab_transform_requested(cfg, section), type_name,
+                                                std::optional<std::string>(group),
+                                                std::optional<std::string>(topo),
+                                                std::optional<std::string>(comb));
   const auto entity_ids = entity_id_per_atom_from_config(cfg, section, frame0, sysctx);
   SelectedChains entities = build_selected_chains(sel, entity_ids);
 

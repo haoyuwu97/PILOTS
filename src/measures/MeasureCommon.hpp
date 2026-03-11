@@ -878,15 +878,24 @@ inline std::optional<SelectionView> build_optional_anchor_selection(const IniCon
                                                                     const Frame& frame0,
                                                                     const SelectionView& fallback_sel,
                                                                     bool needed,
-                                                                    const std::string& measure_name) {
+                                                                    const std::string& measure_name,
+                                                                    std::optional<std::string> fallback_group = std::nullopt,
+                                                                    std::optional<std::string> fallback_topo = std::nullopt,
+                                                                    std::optional<std::string> fallback_combine = std::nullopt) {
   const bool has_anchor_keys = cfg.has_key(section, "anchor_group")
                             || cfg.has_key(section, "anchor_topo_group")
                             || cfg.has_key(section, "anchor_combine");
   if (!needed && !has_anchor_keys) return std::nullopt;
   if (!has_anchor_keys) return fallback_sel;
-  const std::string group = cfg.get_string(section, "anchor_group", std::optional<std::string>("all"));
-  const std::string topo = cfg.get_string(section, "anchor_topo_group", std::optional<std::string>("all"));
-  const std::string comb = cfg.get_string(section, "anchor_combine", std::optional<std::string>("A&T"));
+  const std::string group = cfg.get_string(section, "anchor_group",
+                                           fallback_group ? fallback_group
+                                                          : std::optional<std::string>("all"));
+  const std::string topo = cfg.get_string(section, "anchor_topo_group",
+                                          fallback_topo ? fallback_topo
+                                                        : std::optional<std::string>("all"));
+  const std::string comb = cfg.get_string(section, "anchor_combine",
+                                          fallback_combine ? fallback_combine
+                                                           : std::optional<std::string>("A&T"));
   return get_static_combined_view(sp, frame0, group, topo, comb, measure_name + " anchor");
 }
 
